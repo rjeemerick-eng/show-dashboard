@@ -1,6 +1,6 @@
 {
   "name": "show-dashboard",
-  "version": "1.0.12",
+  "version": "1.0.20",
   "description": "Live mic, IEM, and production crew dashboard",
   "main": "src/main.js",
   "author": {
