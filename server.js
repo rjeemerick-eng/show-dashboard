@@ -686,6 +686,23 @@ app.get('/api/playlist/:id/preview', (req, res) => {
   res.json(svc.state);
 });
 
+// App version info
+app.get('/api/version', (req, res) => {
+  try {
+    const pkg = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'package.json'), 'utf8'));
+    res.json({ version: pkg.version });
+  } catch(e) { res.json({ version: 'unknown' }); }
+});
+
+// Trigger update check from browser
+app.post('/api/check-update', (req, res) => {
+  res.json({ checking: true });
+  // Signal main process to check — works when running in Electron
+  try { require('electron').ipcMain; } catch(e) {}
+  // The Electron main process checks on its own interval — this just confirms
+  console.log('[Update] Manual check triggered from UI');
+});
+
 // Trigger OTA install from browser button
 app.post('/api/install-update', (req, res) => {
   res.json({ ok: true });

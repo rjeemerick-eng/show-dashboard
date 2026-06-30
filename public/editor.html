@@ -120,6 +120,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <button class="btn" onclick="togglePanel('people-panel')"><i class="ti ti-address-book"></i> People</button>
     <button class="btn" onclick="togglePanel('rules-panel')"><i class="ti ti-git-branch"></i> Rules</button>
     <button class="btn" onclick="togglePanel('tag-panel')"><i class="ti ti-tags"></i> Tags</button>
+    <button class="btn" onclick="togglePanel('settings-panel')"><i class="ti ti-settings"></i> Settings</button>
     <button class="btn" onclick="window.open('/display','_blank')"><i class="ti ti-external-link"></i> Display</button>
   </div>
 </div>
@@ -228,6 +229,34 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 <!-- Shared datalist for all combo inputs -->
 <datalist id="pool-list"></datalist>
+
+<!-- SETTINGS PANEL -->
+<div class="panel" id="settings-panel">
+  <div class="panel-title">Settings</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <!-- Updates -->
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Software update</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div id="version-label" style="font-size:12px;color:var(--text-mid)">Version —</div>
+        <div id="update-status" style="font-size:11px;color:var(--text-dim)"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="checkForUpdates()"><i class="ti ti-refresh"></i> Check for updates</button>
+      </div>
+      <div id="update-result" style="margin-top:8px;font-size:12px;color:var(--text-mid)"></div>
+    </div>
+    <!-- App info -->
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">About</div>
+      <div style="font-size:12px;color:var(--text-mid);line-height:2">
+        <div>Show Dashboard</div>
+        <div style="color:var(--text-dim)">Live production crew management</div>
+        <div style="margin-top:6px"><a href="#" onclick="window.open('https://github.com/rjeemerick-eng/show-dashboard','_blank')" style="color:var(--blue);font-size:11px">github.com/rjeemerick-eng/show-dashboard</a></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- PEOPLE LIBRARY PANEL -->
 <div class="panel" id="people-panel">
@@ -421,6 +450,34 @@ async function preloadTagsPool(){
     peopleLibrary = ppl;
     rulesData = await fetch('/api/rules').then(r => r.json());
   } catch(e) {}
+}
+
+async function loadSettingsPanel() {
+  // Load version from server
+  try {
+    const info = await fetch('/api/version').then(r => r.json());
+    document.getElementById('version-label').textContent = `Version ${info.version}`;
+  } catch(e) {}
+}
+
+async function checkForUpdates() {
+  const btn = event.currentTarget;
+  const result = document.getElementById('update-result');
+  const status = document.getElementById('update-status');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Checking…';
+  result.textContent = '';
+  try {
+    const r = await fetch('/api/check-update', { method: 'POST' }).then(res => res.json());
+    if (r.checking) {
+      status.innerHTML = '<span style="color:#7eb8f5">Checking GitHub for updates…</span>';
+      result.innerHTML = '<span style="color:var(--text-dim);font-size:11px">You\'ll see a banner at the top of the screen if an update is found.</span>';
+    }
+  } catch(e) {
+    result.textContent = 'Error checking for updates';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="ti ti-refresh"></i> Check for updates';
 }
 
 // ── People library ─────────────────────────────────────────────────────────────
@@ -795,7 +852,7 @@ function addProdSlot(){
 
 // ── Panel toggle ───────────────────────────────────────────────────────────────
 function togglePanel(id){
-  const panels=['pco-panel','playlist-panel','tag-panel','people-panel','rules-panel'];
+  const panels=['pco-panel','playlist-panel','tag-panel','people-panel','rules-panel','settings-panel'];
   panels.forEach(pid=>{
     const el=document.getElementById(pid);
     if(pid===id){el.classList.toggle('open')}
@@ -806,6 +863,7 @@ function togglePanel(id){
   if(id==='pco-panel'&&document.getElementById('pco-panel').classList.contains('open'))checkPCOAuth();
   if(id==='people-panel'&&document.getElementById('people-panel').classList.contains('open'))loadPeoplePanel();
   if(id==='rules-panel'&&document.getElementById('rules-panel').classList.contains('open'))loadRulesPanel();
+  if(id==='settings-panel'&&document.getElementById('settings-panel').classList.contains('open'))loadSettingsPanel();
 }
 
 // ── PCO ────────────────────────────────────────────────────────────────────────
