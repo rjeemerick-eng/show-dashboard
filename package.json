@@ -1,6 +1,6 @@
 {
   "name": "show-dashboard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Live mic, IEM, and production crew dashboard",
   "main": "src/main.js",
   "author": {
@@ -26,9 +26,33 @@
   "build": {
     "appId": "com.showdashboard.app",
     "productName": "Show Dashboard",
-    "copyright": "Copyright © 2024",
+    "copyright": "Copyright 2024",
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
-        { "target": "dmg", "arch": ["universal"] }
+        {"target": "dmg", "arch": ["universal"]}
       ]
+    },
+    "dmg": {
+      "title": "Show Dashboard",
+      "window": {"width": 540, "height": 380}
+    },
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "server.js",
+      "config.js",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {"from": "public", "to": "public"}
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "rjeemerick-eng",
+      "repo": "show-dashboard",
+      "releaseType": "release"
+    },
+    "afterSign": "scripts/notarize.js"
+  }
+}
