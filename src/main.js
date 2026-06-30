@@ -1,5 +1,3 @@
-cd ~/Downloads/show-dashboard-app
-cat > src/main.js << 'EOF'
 const { app, BrowserWindow, Tray, Menu, shell, nativeImage } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -8,7 +6,6 @@ const http = require('http');
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); process.exit(0); }
 
-let serverProcess = null;
 const SERVER_PORT = 3000;
 
 function startServer() {
@@ -65,7 +62,6 @@ function setupAutoUpdater() {
   autoUpdater.setFeedURL({ provider:'github', owner:'rjeemerick-eng', repo:'show-dashboard' });
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-
   autoUpdater.checkForUpdates();
   setInterval(() => autoUpdater.checkForUpdates(), 1 * 60 * 1000);
 
@@ -77,7 +73,7 @@ function setupAutoUpdater() {
         const b=document.createElement('div');
         b.id='__ub';
         b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#1a1f2e;border-bottom:1px solid rgba(55,138,221,0.5);padding:10px 20px;display:flex;align-items:center;gap:10px;font-family:Inter,system-ui,sans-serif;font-size:13px;color:#e8e9ef';
-        b.innerHTML='<span style="color:#7eb8f5;font-weight:600">⬆ Update v${info.version} available</span><span style="color:rgba(255,255,255,0.4)">Downloading in background…</span>';
+        b.innerHTML='<span style="color:#7eb8f5;font-weight:600">Update available — downloading…</span>';
         document.body.prepend(b);
       })()
     `).catch(()=>{});
@@ -91,13 +87,13 @@ function setupAutoUpdater() {
           const b=document.createElement('div');
           b.id='__ub';
           b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#0f1923;border-bottom:2px solid rgba(55,138,221,0.7);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-family:Inter,system-ui,sans-serif;font-size:13px;color:#e8e9ef;gap:16px';
-          b.innerHTML='<div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">⬆</span><div><div style="font-weight:700;color:#7eb8f5">Update v${info.version} ready</div><div style="font-size:11px;color:rgba(255,255,255,0.4)">App will restart to apply update</div></div></div><div style="display:flex;gap:8px"><button onclick="this.closest(\'#__ub\').remove()" style="padding:6px 14px;border-radius:7px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;font-size:12px;font-family:inherit">Skip for now</button><button onclick="fetch(\'/api/install-update\',{method:\'POST\'})" style="padding:6px 16px;border-radius:7px;border:none;background:#378ADD;color:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">Restart & install</button></div>';
+          b.innerHTML='<div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">⬆</span><div><div style="font-weight:700;color:#7eb8f5">Update ready to install</div><div style="font-size:11px;color:rgba(255,255,255,0.4)">App will restart to apply</div></div></div><div style="display:flex;gap:8px"><button onclick="this.closest(div).remove()" style="padding:6px 14px;border-radius:7px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;font-size:12px">Skip</button><button onclick="fetch(String.fromCharCode(47)+String.fromCharCode(97,112,105,47,105,110,115,116,97,108,108,45,117,112,100,97,116,101),{method:String.fromCharCode(80,79,83,84)})" style="padding:6px 16px;border-radius:7px;border:none;background:#378ADD;color:#fff;cursor:pointer;font-size:12px;font-weight:600">Restart & install</button></div>';
           document.body.prepend(b);
         })()
       `).catch(()=>{});
     });
     if (tray) tray.setContextMenu(Menu.buildFromTemplate([
-      { label:`✦ Update v${info.version} ready — click to install`, click:()=>autoUpdater.quitAndInstall() },
+      { label:'Update ready — click to install', click:()=>autoUpdater.quitAndInstall() },
       { type:'separator' },
       { label:'Open Editor', click:()=>{ if(editorWin)editorWin.focus(); else createEditorWindow(); } },
       { type:'separator' },
@@ -122,8 +118,3 @@ app.whenReady().then(() => {
 app.on('window-all-closed', (e) => e.preventDefault());
 app.on('second-instance', () => { if(editorWin){editorWin.restore();editorWin.focus();} else createEditorWindow(); });
 app.on('activate', () => { if(!editorWin) createEditorWindow(); });
-EOF
-git add src/main.js
-git commit -m "1-min update check, install prompt"
-git tag v1.0.18
-git push && git push origin v1.0.18
