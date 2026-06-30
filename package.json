@@ -19,6 +19,7 @@
     "ws": "^8.16.0"
   },
   "devDependencies": {
+    "@electron/notarize": "^3.1.1",
     "electron": "^29.0.0",
     "electron-builder": "^24.9.1",
     "electron-updater": "^6.1.8"
@@ -30,12 +31,20 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
-        {"target": "dmg", "arch": ["universal"]}
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
       ]
     },
     "dmg": {
       "title": "Show Dashboard",
-      "window": {"width": 540, "height": 380}
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
     "files": [
       "src/**/*",
@@ -45,7 +54,10 @@
       "assets/**/*"
     ],
     "extraResources": [
-      {"from": "public", "to": "public"}
+      {
+        "from": "public",
+        "to": "public"
+      }
     ],
     "publish": {
       "provider": "github",
