@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Show Dashboard — Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--surface:#111;--s2:#181818;--s3:#1e1e1e;
+  --border:rgba(255,255,255,0.07);--border-mid:rgba(255,255,255,0.13);
+  --text:#e8e9ef;--text-mid:rgba(255,255,255,0.5);--text-dim:rgba(255,255,255,0.28);
+  --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--blue:#378ADD;--radius:8px;
+}
+html,body{height:100%}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:13px;display:flex;flex-direction:column}
+
+/* Header */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;gap:10px;flex-wrap:wrap}
+.hdr-left{display:flex;align-items:center;gap:10px}
+.app-title{font-size:14px;font-weight:700}
+.ws-pill{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:100px;font-size:11px;font-weight:600;background:var(--s2);border:1px solid var(--border);color:var(--text-mid)}
+.ws-dot{width:7px;height:7px;border-radius:50%;background:#444;transition:background 0.3s}
+.ws-dot.on{background:var(--green)}.ws-dot.err{background:var(--red)}
+.hdr-right{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:var(--radius);border:1px solid var(--border-mid);background:var(--s2);color:var(--text);cursor:pointer;font-size:12px;font-family:inherit;font-weight:500}
+.btn:hover{background:var(--s3)}
+.btn.on{background:rgba(55,138,221,0.18);border-color:rgba(55,138,221,0.45);color:#7eb8f5}
+.btn.danger{background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.35);color:#f87171}
+.btn.success{background:rgba(34,197,94,0.15);border-color:rgba(34,197,94,0.4);color:#4ade80}
+.btn i{font-size:14px}
+
+/* Panel strip (slides down) */
+.panel{display:none;background:var(--s2);border-bottom:1px solid var(--border-mid);padding:16px 20px;flex-shrink:0}
+.panel.open{display:block}
+.panel-title{font-size:13px;font-weight:600;margin-bottom:12px}
+.pf label{font-size:11px;color:var(--text-mid);display:block;margin-bottom:3px}
+.pf input,.pf select{width:100%;padding:6px 9px;border:1px solid var(--border-mid);border-radius:var(--radius);background:var(--s3);color:var(--text);font-size:12px;font-family:inherit}
+.pf input:focus,.pf select:focus{outline:none;border-color:rgba(55,138,221,0.6)}
+.field-row{display:grid;gap:10px;margin-bottom:10px}
+.field-row.two{grid-template-columns:1fr 1fr}
+.field-row.three{grid-template-columns:1fr 1fr 1fr}
+.field-row.four{grid-template-columns:1fr 1fr 1fr 1fr}
+
+/* Main layout */
+.main{flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 1px 1fr;min-height:0}
+.col-div{background:var(--border-mid)}
+.col{display:flex;flex-direction:column;overflow:hidden;min-height:0}
+
+/* Column header */
+.col-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border-mid);flex-shrink:0}
+.col-hdr-title{font-size:9px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-dim)}
+.col-hdr-right{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim)}
+
+/* Assignment table */
+.assign-list{flex:1;overflow-y:auto;min-height:0}
+.assign-row{display:grid;align-items:center;padding:6px 12px;border-bottom:1px solid var(--border);gap:8px}
+.assign-row:hover{background:rgba(255,255,255,0.02)}
+.iem-row{grid-template-columns:24px 52px 36px 1fr 28px}
+.prod-row-grid{grid-template-columns:40px 1fr 28px}
+.mic-row{grid-template-columns:24px 52px 36px 1fr 28px}
+
+.row-ch{font-size:10px;font-weight:800;color:var(--text-dim);font-variant-numeric:tabular-nums;text-align:right}
+.row-role{font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-avatar{width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+.row-avatar img{width:100%;height:100%;object-fit:cover}
+
+.row-select{width:100%;padding:5px 8px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s3);color:var(--text);font-size:12px;font-family:inherit;cursor:pointer}
+.row-select.filled{border-color:rgba(34,197,94,0.4)}
+.row-select:focus{outline:none;border-color:rgba(55,138,221,0.6)}
+
+.tag-btn{padding:4px 6px;border-radius:5px;border:1px solid var(--border-mid);background:none;color:var(--text-dim);cursor:pointer;font-size:11px;line-height:1;flex-shrink:0}
+.tag-btn:hover{color:var(--green);border-color:rgba(34,197,94,0.5)}
+.tag-btn.tagged{color:var(--green);border-color:rgba(34,197,94,0.5)}
+
+.prod-badge{font-size:9px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:3px 8px;border-radius:5px;color:#fff;white-space:nowrap;text-align:center}
+
+/* Status dot */
+.s-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.s-dot.on{background:var(--green)}.s-dot.off{background:#333}.s-dot.warn{background:var(--amber)}
+
+/* Inline edit row */
+.edit-row{background:var(--s2);border-bottom:1px solid var(--border-mid);padding:10px 12px}
+.edit-row-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.ef label{font-size:10px;color:var(--text-dim);display:block;margin-bottom:3px}
+.ef input,.ef select{width:100%;padding:5px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s3);color:var(--text);font-size:12px;font-family:inherit}
+.ef input:focus,.ef select:focus{outline:none;border-color:rgba(55,138,221,0.6)}
+
+/* Playlist cards */
+.pl-card{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--border-mid);background:var(--s3);margin-bottom:6px}
+.pl-card.live{border-color:rgba(34,197,94,0.4);background:rgba(34,197,94,0.05)}
+
+/* Tag list */
+.tag-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+
+/* Modal overlay */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:900;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--s2);border:1px solid var(--border-mid);border-radius:12px;padding:20px;width:520px;max-height:80vh;overflow-y:auto;z-index:901}
+
+/* Footer */
+.ftr{display:flex;align-items:center;justify-content:space-between;padding:8px 20px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim)}
+
+/* Notification toast */
+.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);padding:9px 18px;border-radius:10px;font-size:12px;font-weight:600;z-index:9999;pointer-events:none;transition:opacity 0.3s}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-left">
+    <div class="app-title">Show dashboard <span style="font-size:11px;font-weight:400;color:var(--text-dim)">— editor</span></div>
+    <div class="ws-pill"><div class="ws-dot" id="ws-dot"></div><span id="ws-lbl">Connecting…</span></div>
+    <span id="live-svc" style="font-size:11px;color:var(--text-dim)"></span>
+  </div>
+  <div class="hdr-right">
+    <button class="btn" onclick="togglePanel('pco-panel')"><i class="ti ti-users"></i> Planning Center</button>
+    <button class="btn" onclick="togglePanel('playlist-panel')"><i class="ti ti-playlist"></i> Services</button>
+    <button class="btn" onclick="togglePanel('tag-panel')"><i class="ti ti-tags"></i> Tags</button>
+    <button class="btn" onclick="window.open('/display','_blank')"><i class="ti ti-external-link"></i> Display</button>
+  </div>
+</div>
+
+<!-- PCO PANEL -->
+<div class="panel" id="pco-panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div class="panel-title" style="margin:0">Planning Center</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div id="pco-auth-dot" style="width:7px;height:7px;border-radius:50%;background:#444"></div>
+      <span id="pco-auth-label" style="font-size:11px;color:var(--text-mid)">Checking…</span>
+    </div>
+  </div>
+  <div id="pco-connect-msg" style="display:none;font-size:12px;color:var(--text-mid);margin-bottom:10px">Add credentials to config.js to connect.</div>
+  <div id="pco-controls" style="display:none">
+    <div class="field-row four" style="margin-bottom:10px">
+      <div class="pf"><label>Service type</label>
+        <select id="pco-svc-type" onchange="fetchUpcomingForType()"><option value="">Select…</option></select>
+      </div>
+      <div class="pf"><label>Plan / date</label>
+        <select id="pco-plan-sel"><option value="">Select…</option></select>
+      </div>
+      <div class="pf" style="display:flex;align-items:flex-end;gap:6px">
+        <button class="btn" style="justify-content:center" onclick="loadRoster(false)"><i class="ti ti-users"></i> Load from PCO</button>
+        <button class="btn" id="refresh-btn" style="display:none;justify-content:center" onclick="loadRoster(true)" title="Add new names only"><i class="ti ti-refresh"></i></button>
+      </div>
+      <div class="pf" style="display:flex;align-items:flex-end">
+        <div id="pco-status" style="font-size:11px;color:var(--text-mid);padding:4px 0;line-height:1.5"></div>
+      </div>
+    </div>
+    <button class="btn" onclick="loadFromTags()" style="margin-top:4px"><i class="ti ti-tag"></i> Load from saved tags (no PCO needed)</button>
+  </div>
+</div>
+
+<!-- PLAYLIST PANEL -->
+<div class="panel" id="playlist-panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div class="panel-title" style="margin:0">Service playlist</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span id="pl-live-badge" style="display:none;padding:3px 10px;border-radius:100px;font-size:10px;font-weight:700;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#4ade80"></span>
+      <button class="btn" onclick="newBlankService()"><i class="ti ti-plus"></i> New blank</button>
+      <button class="btn" onclick="saveAsService()"><i class="ti ti-device-floppy"></i> Save current</button>
+    </div>
+  </div>
+  <div id="pl-list"><div style="font-size:12px;color:var(--text-dim)">No services saved yet.</div></div>
+  <div id="go-live-confirm" style="display:none;margin-top:12px;padding:12px;border:1px solid rgba(34,197,94,0.35);border-radius:10px;background:rgba(34,197,94,0.07)">
+    <div style="font-size:13px;font-weight:600;margin-bottom:6px">Switch display to <span id="go-live-name" style="color:#4ade80"></span>?</div>
+    <div style="font-size:12px;color:var(--text-mid);margin-bottom:10px">The backstage screen will update immediately.</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="document.getElementById('go-live-confirm').style.display='none'"><i class="ti ti-x"></i> Cancel</button>
+      <button class="btn success" id="go-live-btn"><i class="ti ti-broadcast"></i> Go live now</button>
+    </div>
+  </div>
+</div>
+
+<!-- TAG PANEL -->
+<div class="panel" id="tag-panel">
+  <div class="panel-title">Position tags</div>
+  <div style="display:grid;grid-template-columns:340px 1fr;gap:16px">
+    <!-- Add form -->
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:8px">Add / edit tag</div>
+      <div class="field-row two" style="margin-bottom:8px">
+        <div class="pf"><label>Name (must match PCO exactly)</label>
+          <input type="text" id="tag-name" placeholder="e.g. Ruben Mundo"></div>
+        <div class="pf"><label>Photo URL (optional)</label>
+          <input type="text" id="tag-photo" placeholder="https://…"></div>
+      </div>
+      <div class="field-row two" style="margin-bottom:8px">
+        <div class="pf"><label>IEM / Mic slot</label>
+          <select id="tag-iem"><option value="">— none —</option></select></div>
+        <div class="pf"><label>Production position</label>
+          <select id="tag-prod">
+            <option value="">— none —</option>
+            <option value="cg">CG</option>
+            <option value="cam">Camera</option>
+            <option value="foh">FOH</option>
+            <option value="mon">Monitors</option>
+            <option value="light">Lighting</option>
+            <option value="stage">Stage hand</option>
+            <option value="dir">Director / Producer</option>
+            <option value="stream">Streaming / Shader</option>
+          </select></div>
+      </div>
+      <button class="btn success" onclick="saveTag()"><i class="ti ti-tag"></i> Save tag</button>
+    </div>
+    <!-- Tag list -->
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:8px">Saved tags (<span id="tag-count">0</span>)</div>
+      <div id="tag-list" style="max-height:160px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Shared datalist for all combo inputs -->
+<datalist id="pool-list"></datalist>
+
+<!-- MAIN: three-column assignment grid -->
+<div class="main">
+
+  <!-- IEM PACKS -->
+  <div class="col">
+    <div class="col-hdr">
+      <span class="col-hdr-title"><i class="ti ti-headphones" style="font-size:10px"></i> IEM packs</span>
+      <span class="col-hdr-right" id="iem-ct"></span>
+    </div>
+    <div class="assign-list" id="iem-list"></div>
+  </div>
+
+  <div class="col-div"></div>
+
+  <!-- PRODUCTION -->
+  <div class="col">
+    <div class="col-hdr">
+      <span class="col-hdr-title"><i class="ti ti-tool" style="font-size:10px"></i> Production crew</span>
+      <div class="col-hdr-right" style="gap:8px">
+        <span id="prod-ct"></span>
+        <button class="btn" style="padding:3px 8px;font-size:11px" onclick="addProdSlot()"><i class="ti ti-plus"></i></button>
+      </div>
+    </div>
+    <div class="assign-list" id="prod-list"></div>
+  </div>
+
+</div>
+
+<!-- FOOTER -->
+<div class="ftr">
+  <span id="ftr-label">Show dashboard</span>
+  <span id="ftr-right" style="color:var(--text-dim)">click any row to edit details</span>
+</div>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────────
+const COLORS=['#378ADD','#1D9E75','#D85A30','#7F77DD','#BA7517','#D4537E','#639922','#E24B4A','#0F6E56','#534AB7','#993C1D','#854F0B'];
+const PROD_POS={
+  cg:{label:'CG',color:'#7F77DD'},cam:{label:'Camera',color:'#1D9E75'},
+  foh:{label:'FOH',color:'#D85A30'},mon:{label:'Monitors',color:'#378ADD'},
+  light:{label:'Lighting',color:'#BA7517'},stage:{label:'Stage',color:'#666'},
+  dir:{label:'Director',color:'#D4537E'},stream:{label:'Streaming',color:'#639922'}
+};
+const PCO_POS_MAP=[
+  {keys:['drum','perc'],type:'iem'},
+  {keys:['bass'],type:'iem'},
+  {keys:['guitar','gtr','electric'],type:'iem'},
+  {keys:['keys','keyboard','piano'],type:'iem'},
+  {keys:['vox','vocal','soprano','alto','tenor','lead','co-worship','worship leader'],type:'iem'},
+  {keys:['cg','graphics','propresenter','media'],prod:'cg'},
+  {keys:['camera','cam','video operator'],prod:'cam'},
+  {keys:['foh','front of house','audio: foh','house'],prod:'foh'},
+  {keys:['monitor','iem engineer','audio: monitor'],prod:'mon'},
+  {keys:['light','lighting'],prod:'light'},
+  {keys:['stage','stage hand'],prod:'stage'},
+  {keys:['director','music director','worship pastor','producer'],prod:'dir'},
+  {keys:['stream','shader','broadcast','online'],prod:'stream'},
+];
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let state=null, ws=null;
+let stagingPool=[], savedTags={};
+let expandedRow=null; // {type,id}
+let idCtr=200;
+let playlistData=[], activeServiceId=null;
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function initials(n){if(!n||!n.trim())return'?';const p=n.trim().split(' ');return p.length>1?(p[0][0]+p[p.length-1][0]).toUpperCase():p[0].slice(0,2).toUpperCase()}
+function colorFor(n){let h=0;for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h);return COLORS[Math.abs(h)%COLORS.length]}
+function arrFor(t){return t==='mic'?state.mics:t==='iem'?state.iems:state.prod}
+function toast(msg,color='#4ade80'){
+  const el=document.createElement('div');
+  el.className='toast';
+  el.style.cssText=`background:${color}22;border:1px solid ${color}55;color:${color}`;
+  el.innerHTML=msg;document.body.appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';setTimeout(()=>el.remove(),300)},2500);
+}
+function push(){if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'update',payload:state}))}
+
+// ── WebSocket ──────────────────────────────────────────────────────────────────
+function connect(){
+  const proto=location.protocol==='https:'?'wss':'ws';
+  ws=new WebSocket(`${proto}://${location.host}`);
+  const dot=document.getElementById('ws-dot'),lbl=document.getElementById('ws-lbl');
+  ws.onopen=()=>{dot.className='ws-dot on';lbl.textContent='Live'};
+  ws.onclose=()=>{dot.className='ws-dot err';lbl.textContent='Reconnecting…';setTimeout(connect,2000)};
+  ws.onerror=()=>{dot.className='ws-dot err'};
+  ws.onmessage=(e)=>{
+    const msg=JSON.parse(e.data);
+    if(msg.type==='state'){
+      const firstLoad = !state;
+      state=msg.payload;
+      render();
+      // On first connect, pre-load tags into the pool silently
+      if(firstLoad) preloadTagsPool();
+    }
+    if(msg.type==='playlist')handlePlaylist(msg.payload);
+    if(msg.type==='went_live'){
+      toast(`<i class="ti ti-broadcast"></i> Now live: ${msg.payload.name}`);
+      // Clear PCO pool when switching services — dropdowns will repopulate from tags only
+      stagingPool = [];
+      preloadTagsPool();
+    }
+  };
+}
+connect();
+
+async function preloadTagsPool(){
+  try {
+    savedTags = await fetch('/api/tags').then(r => r.json());
+    const pool = await fetch('/api/tags/pool').then(r => r.json());
+    if (pool.length) {
+      stagingPool = pool.map(p => ({ ...p, classified: { type: p.prodPosition ? 'prod' : 'iem', sub: p.prodPosition || 'iem' } }));
+      render(); // refresh dropdowns with tag names
+    }
+  } catch(e) {}
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────────
+function render(){
+  if(!state)return;
+  document.getElementById('ftr-label').textContent=state.serviceName||'Show dashboard';
+  document.getElementById('iem-ct').textContent=state.iems.filter(c=>c.status==='active').length+' active';
+  document.getElementById('prod-ct').textContent=state.prod.filter(c=>c.status==='active').length+' active';
+  renderList('iem');
+  renderList('prod');
+  // Refresh tag IEM dropdown
+  const sel=document.getElementById('tag-iem');
+  if(sel)sel.innerHTML='<option value="">— none —</option>'+state.iems.map((c,i)=>`<option value="${i}">${c.ch} — ${c.role}</option>`).join('');
+  // Rebuild datalist from pool + tags + current state names
+  const dl=document.getElementById('pool-list');
+  if(dl){
+    const seen=new Set();
+    const opts=[];
+    // From staging pool
+    stagingPool.forEach(p=>{if(p.name&&!seen.has(p.name)){seen.add(p.name);opts.push(p.name);}});
+    // From saved tags
+    Object.keys(savedTags).forEach(n=>{if(!seen.has(n)){seen.add(n);opts.push(n);}});
+    // From current state (names already assigned)
+    [...state.iems,...state.mics,...state.prod].forEach(c=>{if(c.name&&!seen.has(c.name)){seen.add(c.name);opts.push(c.name);}});
+    dl.innerHTML=opts.map(n=>`<option value="${n}">`).join('');
+  }
+}
+
+function avatar(name,photo,size=32){
+  if(!name||!name.trim()) return `<div style="width:${size}px;height:${size}px;flex-shrink:0"></div>`;
+  const col=colorFor(name);
+  if(photo)return`<div class="row-avatar" style="width:${size}px;height:${size}px;background:${col}"><img src="${photo}" onerror="this.style.display='none'"></div>`;
+  return`<div class="row-avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.34)}px;background:${col}">${initials(name)}</div>`;
+}
+
+function poolOptions(assigned){
+  const allAssigned=new Set();
+  state.iems.forEach(c=>{if(c.name)allAssigned.add(c.name)});
+  state.mics.forEach(c=>{if(c.name)allAssigned.add(c.name)});
+  state.prod.forEach(c=>{if(c.name)allAssigned.add(c.name)});
+
+  // Build combined list: pool + any names already in state (from tags/previous sessions)
+  const seen=new Set();
+  const combined=[];
+  stagingPool.forEach(p=>{if(!seen.has(p.name)){seen.add(p.name);combined.push(p);}});
+  // Add names from state that aren't in pool (e.g. loaded from saved service)
+  allAssigned.forEach(name=>{
+    if(!seen.has(name)){
+      seen.add(name);
+      const tag=savedTags[name];
+      combined.push({name,photo:tag?.photo||'',position:''});
+    }
+  });
+
+  return combined
+    .filter(p=>!allAssigned.has(p.name)||p.name===assigned)
+    .map(p=>`<option value="${p.name}"${p.name===assigned?' selected':''}>${p.name}</option>`)
+    .join('');
+}
+
+function renderList(type){
+  const arr=arrFor(type);
+  const el=document.getElementById(type+'-list');
+  let html='';
+  if(type==='prod'){
+    // Group by position with header
+    const groups={},order=[];
+    arr.forEach((p,i)=>{
+      if(!groups[p.position]){groups[p.position]=[];order.push(p.position)}
+      groups[p.position].push({...p,_idx:i});
+    });
+    order.forEach(posKey=>{
+      const pos=PROD_POS[posKey]||{label:'Crew',color:'#777'};
+      html+=`<div style="padding:5px 12px 3px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border)">
+        <span style="font-size:8px;font-weight:900;letter-spacing:0.16em;text-transform:uppercase;color:${pos.color}">${pos.label}</span>
+      </div>`;
+      groups[posKey].forEach(p=>{
+        const isExp=expandedRow&&expandedRow.type==='prod'&&expandedRow.id===p.id;
+        const dotCls=p.status==='active'?'on':'off';
+        const tagIcon=savedTags[p.name]?'tagged':'';
+        html+=`<div class="assign-row prod-row-grid" onclick="toggleExpand('prod','${p.id}')" style="cursor:pointer;${p.hidden?'opacity:0.35':''}">
+          ${avatar(p.name,p.photo,32)}
+          <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.role}</div>
+            <input list="pool-list" class="row-select${p.name?' filled':''}"
+              value="${p.name||''}" placeholder="— type or select —"
+              onclick="event.stopPropagation()"
+              onchange="assignProd('${p.id}',this.value.trim())"
+              onblur="assignProd('${p.id}',this.value.trim())"
+              style="font-size:12px;padding:3px 6px;width:100%">
+          </div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <div class="s-dot ${dotCls}"></div>
+            ${p.name?`<button class="tag-btn ${tagIcon}" onclick="event.stopPropagation();quickTag('prod','${p.id}')" title="Save as tag"><i class="ti ti-tag"></i></button>`:'<span style="width:24px"></span>'}
+          </div>
+        </div>`;
+        if(isExp)html+=expandedFields(p,'prod');
+      });
+    });
+  } else {
+    arr.forEach((ch,i)=>{
+      const isExp=expandedRow&&expandedRow.type===type&&expandedRow.id===ch.id;
+      const dotCls=ch.status==='active'?'on':ch.bat!==null&&ch.bat<30?'warn':'off';
+      const tagIcon=savedTags[ch.name]?'tagged':'';
+      html+=`<div class="assign-row ${type==='iem'?'iem-row':'mic-row'}" onclick="toggleExpand('${type}','${ch.id}')" style="cursor:pointer">
+        <div class="row-ch">${ch.ch}</div>
+        <div class="row-role">${ch.role}</div>
+        ${avatar(ch.name,ch.photo,30)}
+        <div style="display:flex;gap:4px;align-items:center" onclick="event.stopPropagation()">
+          <input list="pool-list" class="row-select${ch.name?' filled':''}"
+            value="${ch.name||''}" placeholder="— type or select —"
+            onchange="assignSlot('${type}','${ch.id}',this.value.trim())"
+            onblur="assignSlot('${type}','${ch.id}',this.value.trim())"
+            style="flex:1">
+          ${ch.name?`<button onclick="event.stopPropagation();assignSlot('${type}','${ch.id}','')" style="padding:4px 7px;border-radius:5px;border:1px solid var(--border-mid);background:none;color:var(--text-dim);cursor:pointer;font-size:12px;flex-shrink:0">×</button>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:3px">
+          ${ch.name?`<button class="tag-btn ${tagIcon}" onclick="event.stopPropagation();quickTag('${type}','${ch.id}')" title="Save as tag"><i class="ti ti-tag"></i></button>`:'<span style="width:24px"></span>'}
+        </div>
+      </div>`;
+      if(isExp)html+=expandedFields(ch,type);
+    });
+  }
+  el.innerHTML=html;
+}
+
+function expandedFields(ch,type){
+  let extra='';
+  if(type==='mic')extra=`
+    <div class="ef"><label>Type</label><select onchange="uf('${type}','${ch.id}','type',this.value)">
+      ${['Handheld','Belt pack','Lavalier','Boundary','Headset'].map(t=>`<option${ch.type===t?' selected':''}>${t}</option>`).join('')}
+    </select></div>
+    <div class="ef"><label>Freq (MHz)</label><input type="text" value="${ch.freq||''}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>`;
+  else if(type==='iem')extra=`
+    <div class="ef"><label>Mix</label><input type="text" value="${ch.mix||''}" onchange="uf('${type}','${ch.id}','mix',this.value)"></div>
+    <div class="ef"><label>Freq (MHz)</label><input type="text" value="${ch.freq||''}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>`;
+  else extra=`
+    <div class="ef"><label>Position</label><select onchange="uf('${type}','${ch.id}','position',this.value)">
+      ${Object.entries(PROD_POS).map(([k,v])=>`<option value="${k}"${ch.position===k?' selected':''}>${v.label}</option>`).join('')}
+    </select></div>
+    <div class="ef"><label>Note</label><input type="text" value="${ch.note||''}" onchange="uf('${type}','${ch.id}','note',this.value)"></div>`;
+  return `<div class="edit-row">
+    <div class="edit-row-fields">
+      <div class="ef"><label>Name</label><input type="text" value="${ch.name||''}" onchange="uf('${type}','${ch.id}','name',this.value)"></div>
+      <div class="ef"><label>Role label</label><input type="text" value="${ch.role||''}" onchange="uf('${type}','${ch.id}','role',this.value)"></div>
+      ${extra}
+      <div class="ef"><label>Status</label><select onchange="uf('${type}','${ch.id}','status',this.value)">
+        <option value="active"${ch.status==='active'?' selected':''}>Active</option>
+        <option value="na"${ch.status==='na'?' selected':''}>N/A</option>
+      </select></div>
+      <div class="ef"><label>Photo URL</label><input type="text" value="${ch.photo||''}" placeholder="https://…" oninput="uf('${type}','${ch.id}','photo',this.value)"></div>
+      ${type==='prod'?`<div class="ef"><label>Show on display</label><select onchange="uf('${type}','${ch.id}','hidden',this.value==='1')">
+        <option value="0"${!ch.hidden?' selected':''}>Visible</option>
+        <option value="1"${ch.hidden?' selected':''}>Hidden</option>
+      </select></div>`:''}
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end">
+      ${type==='prod'?`<button class="btn danger" onclick="deleteProd('${ch.id}')"><i class="ti ti-trash"></i> Remove</button>`:''}
+      <button class="btn" onclick="toggleExpand(null,null)">Done</button>
+    </div>
+  </div>`;
+}
+
+function toggleExpand(type,id){
+  if(expandedRow&&expandedRow.type===type&&expandedRow.id===id){
+    expandedRow=null;
+  } else {
+    expandedRow={type,id};
+  }
+  render();
+}
+
+function uf(type,id,field,val){
+  const arr=arrFor(type);
+  const ch=arr.find(c=>c.id===id);
+  if(ch){ch[field]=val;render();push()}
+}
+
+function assignSlot(type,id,name){
+  const arr=arrFor(type);
+  const ch=arr.find(c=>c.id===id);
+  if(!ch)return;
+  if(!name){
+    // Clear assignment
+    ch.name=''; ch.photo=''; ch.status='na';
+    if(type==='iem'){const m=state.mics.find(c=>c.ch===ch.ch);if(m){m.name='';m.photo='';m.status='na';}}
+    if(type==='mic'){const i=state.iems.find(c=>c.ch===ch.ch);if(i){i.name='';i.photo='';i.status='na';}}
+  } else {
+    const photo=stagingPool.find(p=>p.name===name)?.photo||savedTags[name]?.photo||'';
+    ch.name=name;
+    if(photo)ch.photo=photo;
+    if(ch.status==='na')ch.status='active';
+    if(type==='iem'){const m=state.mics.find(c=>c.ch===ch.ch);if(m){m.name=name;if(photo)m.photo=photo;m.status='active';}}
+    if(type==='mic'){const i=state.iems.find(c=>c.ch===ch.ch);if(i){i.name=name;if(photo)i.photo=photo;i.status='active';}}
+  }
+  render();push();
+}
+
+function assignProd(id,name){
+  const p=state.prod.find(c=>c.id===id);
+  if(!p)return;
+  if(!name){
+    p.name=''; p.photo='';
+  } else {
+    const photo=stagingPool.find(sp=>sp.name===name)?.photo||savedTags[name]?.photo||'';
+    p.name=name;
+    if(photo)p.photo=photo;
+    if(p.status==='na')p.status='active';
+  }
+  render();push();
+}
+
+function deleteProd(id){
+  state.prod=state.prod.filter(p=>p.id!==id);
+  expandedRow=null;render();push();
+}
+
+function addProdSlot(){
+  idCtr++;
+  state.prod.push({id:'p'+idCtr,position:'stage',role:'Stage hand',name:'',note:'',status:'active',photo:''});
+  render();push();
+}
+
+// ── Panel toggle ───────────────────────────────────────────────────────────────
+function togglePanel(id){
+  const panels=['pco-panel','playlist-panel','tag-panel'];
+  panels.forEach(pid=>{
+    const el=document.getElementById(pid);
+    if(pid===id){el.classList.toggle('open')}
+    else{el.classList.remove('open')}
+  });
+  if(id==='playlist-panel'&&document.getElementById('playlist-panel').classList.contains('open'))loadPlaylistUI();
+  if(id==='tag-panel'&&document.getElementById('tag-panel').classList.contains('open'))loadTags();
+  if(id==='pco-panel'&&document.getElementById('pco-panel').classList.contains('open'))checkPCOAuth();
+}
+
+// ── PCO ────────────────────────────────────────────────────────────────────────
+async function checkPCOAuth(){
+  try{
+    const s=await fetch('/auth/status').then(r=>r.json());
+    const dot=document.getElementById('pco-auth-dot');
+    const lbl=document.getElementById('pco-auth-label');
+    if(s.connected){
+      dot.style.background='var(--green)';lbl.textContent='Connected';
+      document.getElementById('pco-connect-msg').style.display='none';
+      document.getElementById('pco-controls').style.display='block';
+      fetchPCOServices();
+    } else {
+      dot.style.background='#555';lbl.textContent='Not connected — check config.js';
+      document.getElementById('pco-connect-msg').style.display='block';
+    }
+  }catch(e){}
+}
+
+async function fetchPCOServices(){
+  try{
+    const d=await fetch('/api/pco/services/v2/service_types?per_page=25').then(r=>r.json());
+    const sel=document.getElementById('pco-svc-type');
+    sel.innerHTML='<option value="">Select…</option>'+(d.data||[]).map(t=>`<option value="${t.id}">${t.attributes.name}</option>`).join('');
+  }catch(e){}
+}
+
+async function fetchUpcomingForType(){
+  const typeId=document.getElementById('pco-svc-type').value;
+  const planSel=document.getElementById('pco-plan-sel');
+  if(!typeId){planSel.innerHTML='<option value="">Select…</option>';return}
+  planSel.innerHTML='<option value="">Loading…</option>';
+  try{
+    const d=await fetch(`/api/pco/services/v2/service_types/${typeId}/plans?filter=future&per_page=8&order=sort_date`).then(r=>r.json());
+    const plans=d.data||[];
+    planSel.innerHTML='<option value="">Select plan…</option>'+plans.map(p=>`<option value="${p.id}">${p.attributes.dates||p.attributes.title||p.id}</option>`).join('');
+  }catch(e){planSel.innerHTML='<option>Error</option>'}
+}
+
+function classifyPerson(person){
+  const pos=(person.position||person.teamName||'').toLowerCase();
+  for(const rule of PCO_POS_MAP){
+    if(rule.keys.some(k=>pos.includes(k))) return rule.prod?{type:'prod',sub:rule.prod}:{type:'iem'};
+  }
+  return{type:'iem'};
+}
+
+async function loadFromTags(){
+  const status = document.getElementById('pco-status');
+  status.textContent = 'Loading from saved tags…';
+  try {
+    savedTags = await fetch('/api/tags').then(r => r.json());
+    const pool = await fetch('/api/tags/pool').then(r => r.json());
+    stagingPool = pool.map(p => ({ ...p, classified: { type: p.prodPosition ? 'prod' : 'iem', sub: p.prodPosition || 'iem' } }));
+
+    // Apply tags to slots
+    stagingPool.forEach(person => {
+      const tag = savedTags[person.name];
+      if (!tag) return;
+      if (tag.iemSlot != null) {
+        const iem = state.iems[tag.iemSlot];
+        const mic = state.mics[tag.iemSlot];
+        if (iem && !iem.name) { iem.name = person.name; iem.status = 'active'; if (person.photo) iem.photo = person.photo; }
+        if (mic && !mic.name) { mic.name = person.name; mic.status = 'active'; if (person.photo) mic.photo = person.photo; }
+      }
+      if (tag.prodPosition) {
+        const idx = state.prod.findIndex(p => p.position === tag.prodPosition && !p.name);
+        if (idx !== -1) { state.prod[idx].name = person.name; state.prod[idx].status = 'active'; if (person.photo) state.prod[idx].photo = person.photo; }
+      }
+    });
+
+    const count = Object.keys(savedTags).length;
+    status.innerHTML = `<span style="color:#4ade80">${count} tagged people loaded — no PCO needed</span>`;
+    document.getElementById('refresh-btn').style.display = 'inline-flex';
+    render(); push();
+  } catch(e) { status.textContent = 'Error: ' + e.message; }
+}
+
+async function loadRoster(isRefresh=false){
+  const typeId=document.getElementById('pco-svc-type').value;
+  const planId=document.getElementById('pco-plan-sel').value;
+  const status=document.getElementById('pco-status');
+  if(!typeId||!planId){status.textContent='Select service type and plan first.';return}
+  status.textContent=isRefresh?'Refreshing…':'Loading roster…';
+  try{
+    const data=await fetch(`/api/pco-roster?typeId=${typeId}&planId=${planId}`).then(r=>r.json());
+    if(data.error)throw new Error(data.error);
+    const freshPool=[];
+    Object.entries(data.grouped).forEach(([team,members])=>{
+      members.forEach(m=>freshPool.push({...m,classified:classifyPerson(m)}));
+    });
+    savedTags=await fetch('/api/tags').then(r=>r.json());
+
+    if(isRefresh){
+      const existing=new Set(stagingPool.map(p=>p.name));
+      const used=new Set([...state.iems,...state.mics,...state.prod].map(c=>c.name).filter(Boolean));
+      const newPeople=freshPool.filter(p=>!existing.has(p.name)&&!used.has(p.name));
+      stagingPool.push(...newPeople);
+      status.innerHTML=newPeople.length
+        ?`<span style="color:#4ade80">${newPeople.length} new: ${newPeople.map(p=>p.name).join(', ')}</span>`
+        :`<span style="color:var(--text-dim)">No new people</span>`;
+      render();return;
+    }
+
+    stagingPool=freshPool;
+    // Apply tags
+    stagingPool.forEach(person=>{
+      const tag=savedTags[person.name];
+      if(!tag)return;
+      if(tag.iemSlot!=null){
+        const iem=state.iems[tag.iemSlot];const mic=state.mics[tag.iemSlot];
+        if(iem&&!iem.name){iem.name=person.name;if(person.photo)iem.photo=person.photo}
+        if(mic&&!mic.name){mic.name=person.name;if(person.photo)mic.photo=person.photo}
+      }
+      if(tag.prodPosition){
+        const idx=state.prod.findIndex((p,i)=>p.position===tag.prodPosition&&!state.prod.slice(0,i).some(x=>x.name===person.name));
+        if(idx!==-1&&!state.prod[idx].name){state.prod[idx].name=person.name;state.prod[idx].status='active';if(person.photo)state.prod[idx].photo=person.photo}
+      }
+    });
+    // Auto-classify untagged
+    stagingPool.filter(p=>!savedTags[p.name]).forEach(person=>{
+      if(person.classified.type==='prod'){
+        const idx=state.prod.findIndex(p=>p.position===person.classified.sub&&!p.name);
+        if(idx!==-1){state.prod[idx].name=person.name;state.prod[idx].status='active';if(person.photo)state.prod[idx].photo=person.photo}
+      }
+    });
+
+    const tagCount=stagingPool.filter(p=>savedTags[p.name]).length;
+    status.innerHTML=`<span style="color:#7eb8f5">${stagingPool.length} people loaded${tagCount?`, ${tagCount} auto-assigned`:''}</span>`;
+    document.getElementById('refresh-btn').style.display='inline-flex';
+    render();push();
+  }catch(e){status.textContent='Error: '+e.message}
+}
+
+// ── Quick tag from row ─────────────────────────────────────────────────────────
+async function quickTag(type,id){
+  const arr=arrFor(type);
+  const ch=arr.find(c=>c.id===id);
+  if(!ch||!ch.name){toast('Add a name first','#f59e0b');return}
+  const idx=arr.indexOf(ch);
+  const tag={name:ch.name,iemSlot:type!=='prod'?idx:null,micSlot:type!=='prod'?idx:null,prodPosition:type==='prod'?ch.position:null,photo:ch.photo||null};
+  await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(tag)});
+  savedTags[ch.name]=tag;
+  toast(`<i class="ti ti-tag"></i> ${ch.name} tagged`);
+  render();
+}
+
+// ── Tag panel ──────────────────────────────────────────────────────────────────
+async function loadTags(){
+  savedTags=await fetch('/api/tags').then(r=>r.json());
+  renderTagList();
+}
+
+function renderTagList(){
+  const names=Object.keys(savedTags);
+  document.getElementById('tag-count').textContent=names.length;
+  const PROD_LABELS={cg:'CG',cam:'Camera',foh:'FOH',mon:'Monitors',light:'Lighting',stage:'Stage hand',dir:'Director',stream:'Streaming'};
+  document.getElementById('tag-list').innerHTML=!names.length
+    ?'<div style="font-size:12px;color:var(--text-dim)">No tags yet.</div>'
+    :names.map(name=>{
+      const t=savedTags[name];
+      const iemLbl=t.iemSlot!=null?`IEM ${Number(t.iemSlot)+1} — ${state?.iems[t.iemSlot]?.role||''}`:null;
+      const prodLbl=t.prodPosition?PROD_LABELS[t.prodPosition]:null;
+      const col=colorFor(name);
+      const av=t.photo?`<img src="${t.photo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover">`
+        :`<div style="width:28px;height:28px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff">${initials(name)}</div>`;
+      return`<div class="tag-row">
+        ${av}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600">${name}</div>
+          <div style="font-size:10px;color:var(--text-dim)">${[iemLbl&&'📻 '+iemLbl,prodLbl&&'🎬 '+prodLbl].filter(Boolean).join(' · ')||'No slot set'}</div>
+        </div>
+        <button onclick="editTagLoad('${name.replace(/'/g,"\\'")}')" style="padding:3px 7px;border-radius:5px;border:1px solid var(--border-mid);background:none;color:var(--text-mid);cursor:pointer;font-size:11px"><i class="ti ti-edit"></i></button>
+        <button onclick="deleteTagNow('${name.replace(/'/g,"\\'")}')" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px"><i class="ti ti-trash"></i></button>
+      </div>`;
+    }).join('');
+}
+
+function editTagLoad(name){
+  const t=savedTags[name];
+  document.getElementById('tag-name').value=name;
+  document.getElementById('tag-photo').value=t.photo||'';
+  document.getElementById('tag-iem').value=t.iemSlot!=null?String(t.iemSlot):'';
+  document.getElementById('tag-prod').value=t.prodPosition||'';
+}
+
+async function saveTag(){
+  const name=document.getElementById('tag-name').value.trim();
+  if(!name){toast('Enter a name','#f59e0b');return}
+  const iemSlot=document.getElementById('tag-iem').value;
+  const prodPosition=document.getElementById('tag-prod').value;
+  const photo=document.getElementById('tag-photo').value.trim();
+  const tag={name,iemSlot:iemSlot!==''?parseInt(iemSlot):null,micSlot:iemSlot!==''?parseInt(iemSlot):null,prodPosition:prodPosition||null,photo:photo||null};
+  await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(tag)});
+  savedTags[name]=tag;
+  document.getElementById('tag-name').value='';
+  document.getElementById('tag-photo').value='';
+  toast('<i class="ti ti-tag"></i> Tag saved');
+  renderTagList();
+}
+
+async function deleteTagNow(name){
+  await fetch(`/api/tags/${encodeURIComponent(name)}`,{method:'DELETE'});
+  delete savedTags[name];
+  renderTagList();
+}
+
+// ── Playlist ───────────────────────────────────────────────────────────────────
+function handlePlaylist(data){
+  playlistData=data.playlist||[];
+  activeServiceId=data.activeServiceId;
+  const active=playlistData.find(s=>s.id===activeServiceId);
+  const badge=document.getElementById('pl-live-badge');
+  const liveSvc=document.getElementById('live-svc');
+  if(active){badge.textContent='Live: '+active.name;badge.style.display='inline-flex';liveSvc.textContent='● '+active.name}
+  else{badge.style.display='none';liveSvc.textContent=''}
+  renderPlaylistUI();
+}
+
+async function loadPlaylistUI(){
+  const d=await fetch('/api/playlist').then(r=>r.json());
+  handlePlaylist(d);
+}
+
+function renderPlaylistUI(){
+  const el=document.getElementById('pl-list');
+  if(!playlistData.length){el.innerHTML='<div style="font-size:12px;color:var(--text-dim)">No services saved yet.</div>';return}
+  el.innerHTML=playlistData.map(svc=>{
+    const isLive=svc.id===activeServiceId;
+    const date=new Date(svc.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    return`<div class="pl-card ${isLive?'live':''}">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
+          ${isLive?'<span style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block"></span>':''}
+          <span contenteditable="true" onblur="renameService('${svc.id}',this.innerText)" style="outline:none">${svc.name}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:1px">${date}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn" style="padding:4px 10px;font-size:11px" onclick="previewSvc('${svc.id}','${svc.name.replace(/'/g,"\\'")}')" title="Load into editor"><i class="ti ti-eye"></i></button>
+        <button class="btn" style="padding:4px 10px;font-size:11px" onclick="updateSvc('${svc.id}')" title="Overwrite with current"><i class="ti ti-refresh"></i></button>
+        ${!isLive?`<button class="btn success" style="padding:4px 10px;font-size:11px" onclick="confirmGoLive('${svc.id}','${svc.name.replace(/'/g,"\\'")}')"><i class="ti ti-broadcast"></i></button>`
+          :`<span style="font-size:10px;color:#4ade80;font-weight:700;padding:4px 6px">LIVE</span>`}
+        <button class="btn danger" style="padding:4px 8px;font-size:11px" onclick="deleteSvc('${svc.id}')"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function newBlankService(){
+  const name = prompt('Service name:', 'Sunday 9am');
+  if (!name) return;
+
+  // Deep clone current state structure but wipe all names, photos, assignments
+  const blank = JSON.parse(JSON.stringify(state));
+  blank.serviceName = name;
+  blank.mics.forEach(c => { c.name=''; c.photo=''; c.status='na'; });
+  blank.iems.forEach(c => { c.name=''; c.photo=''; c.status='na'; c.mix=''; });
+  blank.prod.forEach(c => { c.name=''; c.photo=''; });
+
+  // Save as a playlist entry
+  const res = await fetch('/api/playlist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+  const { id } = await res.json();
+
+  // Overwrite that entry with the blank state
+  await fetch(`/api/playlist/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ saveCurrentState: false, blankState: blank })
+  });
+
+  // Go live with it immediately — clears the display and editor
+  await fetch(`/api/playlist/${id}/go-live`, { method: 'POST' });
+
+  stagingPool = [];
+  loadPlaylistUI();
+  toast(`<i class="ti ti-plus"></i> New blank service: ${name}`);
+}
+
+async function saveAsService(){
+  const name=prompt('Service name:','Sunday 9am');if(!name)return;
+  await fetch('/api/playlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+  loadPlaylistUI();toast('<i class="ti ti-check"></i> Saved: '+name);
+}
+async function renameService(id,name){if(!name.trim())return;await fetch(`/api/playlist/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim()})})}
+async function updateSvc(id){if(!confirm('Overwrite with current plot?'))return;await fetch(`/api/playlist/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({saveCurrentState:true})});toast('Updated');loadPlaylistUI()}
+async function previewSvc(id,name){
+  const s=await fetch(`/api/playlist/${id}/preview`).then(r=>r.json());
+  state=s;render();push();
+  toast(`<i class="ti ti-eye"></i> Previewing: ${name}`,'#7eb8f5');
+}
+function confirmGoLive(id,name){
+  document.getElementById('go-live-name').textContent=name;
+  document.getElementById('go-live-confirm').style.display='block';
+  document.getElementById('go-live-btn').onclick=()=>goLive(id);
+}
+async function goLive(id){
+  await fetch(`/api/playlist/${id}/go-live`,{method:'POST'});
+  document.getElementById('go-live-confirm').style.display='none';
+  loadPlaylistUI();
+}
+async function deleteSvc(id){if(!confirm('Delete this service?'))return;await fetch(`/api/playlist/${id}`,{method:'DELETE'});loadPlaylistUI()}
+</script>
+</body>
+</html>

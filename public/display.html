@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Show Dashboard — Display</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a0a; --surface: #111;
+  --border: rgba(255,255,255,0.07); --border-mid: rgba(255,255,255,0.13);
+  --text: #fff; --text-mid: rgba(255,255,255,0.45); --text-dim: rgba(255,255,255,0.22);
+  --green: #22c55e; --amber: #f59e0b; --red: #ef4444;
+}
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background: var(--bg); color: var(--text);
+}
+.shell { width: 100vw; height: 100vh; display: grid; grid-template-rows: 64px 1fr 36px; }
+
+/* Header */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 40px; background: var(--surface); border-bottom: 1px solid var(--border-mid);
+}
+.svc-label { font-size: 9px; font-weight: 800; letter-spacing: 0.18em; color: var(--text-dim); text-transform: uppercase; }
+.svc-name  { font-size: 18px; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px; }
+.clock-wrap { text-align: right; }
+.clock-lbl  { font-size: 9px; font-weight: 800; letter-spacing: 0.16em; color: var(--text-dim); text-transform: uppercase; }
+.clock-time { font-size: 30px; font-weight: 300; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; line-height: 1; }
+.clock-date { font-size: 9px; color: var(--text-mid); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 3px; }
+
+/* Body */
+.body { display: grid; grid-template-columns: 1fr 1px 1fr; overflow: hidden; min-height: 0; }
+.col-divider { background: var(--border-mid); }
+.col { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+
+/* Column header */
+.col-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 28px; border-bottom: 1px solid var(--border-mid); flex-shrink: 0;
+}
+.col-title { font-size: 9px; font-weight: 900; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-dim); }
+.col-count { font-size: 9px; font-weight: 700; color: var(--text-dim); letter-spacing: 0.08em; }
+
+/* IEM sub-header */
+.col-sub-row { display: grid; padding: 5px 28px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.iem-sub { grid-template-columns: 36px 44px 1fr 1fr; gap: 0 10px; }
+.col-sub { font-size: 8px; font-weight: 900; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim); }
+
+/* IEM row list — rows stretch equally */
+.row-list { flex: 1; overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
+.person-row {
+  display: grid; align-items: center; padding: 0 28px;
+  border-bottom: 1px solid var(--border);
+  flex: 1; min-height: 0; transition: opacity 0.2s;
+}
+.iem-row { grid-template-columns: 36px 44px 1fr 1fr; gap: 0 10px; }
+.person-row.na { opacity: 0.2; }
+
+.pack-num { font-size: 11px; font-weight: 900; color: var(--text-dim); font-variant-numeric: tabular-nums; letter-spacing: 0.05em; }
+.avatar-circle {
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-weight: 900; color: #fff; text-transform: uppercase; flex-shrink: 0; overflow: hidden;
+}
+.avatar-circle img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.cell-role { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell-name { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.s-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.s-dot.on   { background: var(--green); }
+.s-dot.off  { background: #2a2a2a; }
+.s-dot.warn { background: var(--amber); }
+
+/* Production — scrolls naturally, no flex stretch */
+.prod-list {
+  flex: 1; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.prod-group {
+  display: flex; flex-direction: column;
+  flex: 1; min-height: 0;
+  border-bottom: 1px solid var(--border-mid);
+}
+.prod-group:last-child { border-bottom: none; }
+
+.prod-group-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 28px; flex-shrink: 0;
+  /* height scales with group */
+}
+.prod-group-label { font-size: 9px; font-weight: 900; letter-spacing: 0.18em; text-transform: uppercase; white-space: nowrap; }
+.prod-group-line  { flex: 1; height: 1px; background: var(--border); }
+
+.prod-members { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.prod-member-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 28px 0 40px;
+  flex: 1; min-height: 0;
+  border-bottom: 1px solid var(--border);
+  transition: opacity 0.2s;
+}
+.prod-member-row:last-child { border-bottom: none; }
+.prod-member-row.na { opacity: 0.22; }
+.prod-member-text { flex: 1; min-width: 0; }
+.prod-member-role { font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prod-member-name { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Footer */
+.footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 40px; background: var(--surface); border-top: 1px solid var(--border);
+}
+.footer-left  { font-size: 8px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
+.footer-right { display: flex; align-items: center; gap: 7px; font-size: 8px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); }
+.ws-dot { width: 6px; height: 6px; border-radius: 50%; background: #2a2a2a; transition: background 0.3s; }
+.ws-dot.on  { background: var(--green); }
+.ws-dot.err { background: var(--red); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="header">
+    <div>
+      <div class="svc-label">Production</div>
+      <div class="svc-name" id="svc-name">Sunday service</div>
+    </div>
+    <div class="clock-wrap">
+      <div class="clock-lbl">Current time</div>
+      <div class="clock-time" id="clock">00:00</div>
+      <div class="clock-date" id="clock-date"></div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- LEFT: IEM packs -->
+    <div class="col">
+      <div class="col-head">
+        <span class="col-title">IEM pack assignment</span>
+        <span class="col-count" id="iem-ct"></span>
+      </div>
+      <div class="col-sub-row iem-sub">
+        <span class="col-sub">Pack</span>
+        <span class="col-sub"></span>
+        <span class="col-sub">Name</span>
+        <span class="col-sub">Role</span>
+      </div>
+      <div class="row-list" id="iem-list"></div>
+    </div>
+
+    <div class="col-divider"></div>
+
+    <!-- RIGHT: Production crew fills top, bottom left transparent for clock overlay -->
+    <div class="col" style="display:flex;flex-direction:column">
+      <div class="col-head">
+        <span class="col-title">Production crew</span>
+        <span class="col-count" id="prod-ct"></span>
+      </div>
+      <div class="prod-list" id="prod-list"></div>
+      <!-- Bottom half: transparent — overlay your clock app here -->
+      <div style="flex:1;min-height:0;background:transparent"></div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <span class="footer-left" id="footer-stats">Show dashboard</span>
+    <div class="footer-right">
+      <div class="ws-dot" id="ws-dot"></div>
+      <span id="ws-lbl">Connecting…</span>
+    </div>
+  </div>
+
+</div>
+<script>
+const COLORS=['#378ADD','#1D9E75','#D85A30','#7F77DD','#BA7517','#D4537E','#639922','#E24B4A','#0F6E56','#534AB7','#993C1D','#854F0B'];
+const PROD_POS={
+  cg:    {label:'CG',            color:'#7F77DD'},
+  cam:   {label:'Camera',        color:'#1D9E75'},
+  foh:   {label:'FOH',           color:'#D85A30'},
+  mon:   {label:'Monitors',      color:'#378ADD'},
+  light: {label:'Lighting',      color:'#BA7517'},
+  stage: {label:'Stage',         color:'#777777'},
+  dir:   {label:'Director',      color:'#D4537E'},
+  stream:{label:'Streaming',     color:'#639922'},
+};
+
+function initials(n){ if(!n||!n.trim())return '?'; const p=n.trim().split(' '); return p.length>1?(p[0][0]+p[p.length-1][0]).toUpperCase():p[0].slice(0,2).toUpperCase(); }
+function colorFor(n){ let h=0; for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h); return COLORS[Math.abs(h)%COLORS.length]; }
+
+function tick(){
+  const now=new Date();
+  document.getElementById('clock').textContent=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('clock-date').textContent=DAYS[now.getDay()]+' · '+MO[now.getMonth()]+' '+now.getDate();
+}
+tick(); setInterval(tick,10000);
+
+function makeIemRow(ch){
+  const hasName=ch.name&&ch.name.trim();
+  const on=hasName||(ch.status==='active');
+  const dotCls=!hasName?'off':(ch.bat!==null&&ch.bat<30)?'warn':'on';
+  const col=colorFor(ch.name||ch.role);
+  const av=hasName
+    ?(ch.photo?`<img src="${ch.photo}" alt="${ch.name}" onerror="this.style.display='none'">`:(initials(ch.name)))
+    :'';
+  const avatarEl=hasName
+    ?`<div class="avatar-circle" style="background:${col};width:36px;height:36px;font-size:11px">${av}</div>`
+    :`<div style="width:36px;height:36px;flex-shrink:0"></div>`;
+  return `<div class="person-row iem-row${on?'':' na'}">
+    <div class="pack-num">${ch.ch}</div>
+    ${avatarEl}
+    <div class="cell-name" style="color:var(--text);font-weight:900">${ch.name||'—'}</div>
+    <div class="cell-role" style="color:var(--text-mid);font-weight:700"><div class="s-dot ${dotCls}"></div>${ch.role}</div>
+  </div>`;
+}
+
+function renderProd(prod){
+  return prod
+    .filter(p => !p.hidden && p.status === 'active' && p.name)
+    .map(p => {
+      const col = colorFor(p.name);
+      const av = p.photo
+        ? `<img src="${p.photo}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.style.display='none'">`
+        : initials(p.name);
+      return `<div style="display:grid;grid-template-columns:30px 1fr 1fr;gap:0 10px;align-items:center;padding:0 28px;border-bottom:1px solid var(--border);flex:1;min-height:0">
+        <div class="avatar-circle" style="background:${col};width:28px;height:28px;font-size:9px;overflow:hidden;flex-shrink:0">${av}</div>
+        <div style="font-size:12px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${p.name}</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid)">${p.role}</div>
+      </div>`;
+    }).join('');
+}
+function scaleText(container){
+  // Auto-scale font sizes so prod panel always fits
+  const els = container.querySelectorAll('#fs-role,#fs-name,#fs-glabel');
+  // Reset first
+  els.forEach(el=>el.style.fontSize='');
+  // Shrink if needed
+  let scale=1;
+  while(container.scrollHeight > container.clientHeight + 2 && scale > 0.4){
+    scale -= 0.02;
+    container.querySelectorAll('#fs-role').forEach(el=>el.style.fontSize=(13*scale)+'px');
+    container.querySelectorAll('#fs-name').forEach(el=>el.style.fontSize=(11*scale)+'px');
+    container.querySelectorAll('#fs-glabel').forEach(el=>el.style.fontSize=(9*scale)+'px');
+    container.querySelectorAll('.prod-group-header').forEach(el=>el.style.paddingTop=(6*scale)+'px');
+    container.querySelectorAll('.prod-group-header').forEach(el=>el.style.paddingBottom=(4*scale)+'px');
+    container.querySelectorAll('.prod-member-row').forEach(el=>{el.style.gap=(12*scale)+'px';});
+    container.querySelectorAll('.avatar-circle').forEach(el=>{el.style.width=(32*scale)+'px';el.style.height=(32*scale)+'px';el.style.fontSize=(10*scale)+'px';});
+  }
+}
+
+function render(s){
+  document.getElementById('svc-name').textContent=s.serviceName||'Sunday service';
+  const activeIem=s.iems.filter(c=>c.status==='active').length;
+  const activeProd=s.prod.filter(c=>c.status==='active'&&!c.hidden).length;
+  document.getElementById('iem-ct').textContent=`${activeIem} of ${s.iems.length} active`;
+  document.getElementById('prod-ct').textContent=`${activeProd} active`;
+  document.getElementById('footer-stats').textContent=`${s.serviceName||'Sunday service'} · ${activeIem} IEMs · ${activeProd} crew`;
+  document.getElementById('iem-list').innerHTML=s.iems.map(makeIemRow).join('');
+  document.getElementById('prod-list').innerHTML = renderProd(s.prod);
+}
+
+function connect(){
+  const proto=location.protocol==='https:'?'wss':'ws';
+  const ws=new WebSocket(`${proto}://${location.host}`);
+  const dot=document.getElementById('ws-dot');
+  const lbl=document.getElementById('ws-lbl');
+  ws.onopen  =()=>{dot.className='ws-dot on';lbl.textContent='Live';};
+  ws.onclose =()=>{dot.className='ws-dot err';lbl.textContent='Reconnecting…';setTimeout(connect,2000);};
+  ws.onerror =()=>{dot.className='ws-dot err';};
+  ws.onmessage=(e)=>{
+    const msg=JSON.parse(e.data);
+    if(msg.type==='state') render(msg.payload);
+    if(msg.type==='went_live') {
+      // Brief flash so backstage crew knows it switched
+      const flash=document.createElement('div');
+      flash.style.cssText='position:fixed;top:0;left:0;right:0;padding:12px;background:rgba(34,197,94,0.18);border-bottom:1px solid rgba(34,197,94,0.5);color:#4ade80;font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;text-align:center;z-index:999';
+      flash.textContent='Now live: '+msg.payload.name;
+      document.body.appendChild(flash);
+      setTimeout(()=>flash.remove(),4000);
+    }
+  };
+}
+connect();
+</script>
+</body>
+</html>
