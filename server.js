@@ -4,9 +4,18 @@ const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
 
-// Load local config if present
+// Load local config if present — check home dir first (writable), then app dir
 let localConfig = {};
-try { localConfig = require('./config.js'); } catch(e) {}
+try {
+  const os = require('os');
+  const homeCfg = require('path').join(os.homedir(), '.show-dashboard-config.js');
+  if (require('fs').existsSync(homeCfg)) {
+    localConfig = require(homeCfg);
+    console.log('[Config] Loaded from home dir');
+  } else {
+    localConfig = require('./config.js');
+  }
+} catch(e) {}
 
 const app = express();
 const server = http.createServer(app);
@@ -325,15 +334,22 @@ app.get('/auth/status', (req, res) => {
 app.post('/auth/credentials', (req, res) => {
   const { appId, token } = req.body;
   if (!appId || !token) return res.status(400).json({ error: 'Missing appId or token' });
-  // Set as PAT mode
   localConfig.PCO_CLIENT_ID     = appId.trim();
   localConfig.PCO_CLIENT_SECRET = token.trim();
+  localConfig.PCO_USE_PAT       = true;
   pcoAccessToken = '__PAT__';
-  // Persist to config.js so it survives restarts
-  const configPath = require('path').join(__dirname, 'config.js');
+
+  // Save to writable location — works both in dev and inside packaged Electron (.asar is read-only)
+  const os = require('os');
+  const savePaths = [
+    require('path').join(os.homedir(), '.show-dashboard-config.js'),
+    require('path').join(__dirname, 'config.js'),
+  ];
   const configContent = `module.exports = {\n  PCO_CLIENT_ID:     '${appId.trim()}',\n  PCO_CLIENT_SECRET: '${token.trim()}',\n  PCO_REDIRECT_URI:  'http://localhost:3000/auth/callback',\n  PCO_USE_PAT: true,\n};\n`;
-  require('fs').writeFileSync(configPath, configContent);
-  console.log('[PCO] Credentials saved via UI');
+  for (const p of savePaths) {
+    try { require('fs').writeFileSync(p, configContent); console.log('[PCO] Saved to:', p); break; }
+    catch(e) { console.warn('[PCO] Could not save to:', p); }
+  }
   broadcast({ type: 'pco_auth', payload: { connected: true } });
   res.json({ ok: true });
 });
