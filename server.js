@@ -14,7 +14,9 @@ const wss = new WebSocket.Server({ server });
 
 const PORT = process.env.PORT || 3000;
 const PLAYLIST_FILE = path.join(__dirname, 'playlist.json');
-const TAGS_FILE     = path.join(__dirname, 'tags.json');
+const TAGS_FILE    = path.join(__dirname, 'tags.json');
+const PEOPLE_FILE  = path.join(__dirname, 'people.json');
+const RULES_FILE   = path.join(__dirname, 'rules.json');
 
 // ─── Playlist (persisted to disk) ────────────────────────────────────────────
 let playlist = []; // [{id, name, createdAt, state}]
@@ -63,6 +65,41 @@ function saveTags() {
   catch(e) { console.error('[Tags] Save error:', e.message); }
 }
 loadTags();
+
+// ─── People library (persisted) ───────────────────────────────────────────────
+// [{id, name, photo, defaultIemSlot, defaultProdPosition, notes}]
+let people = [];
+function loadPeople() {
+  try {
+    if (fs.existsSync(PEOPLE_FILE)) {
+      people = JSON.parse(fs.readFileSync(PEOPLE_FILE, 'utf8'));
+      console.log(`[People] Loaded ${people.length} people`);
+    }
+  } catch(e) { console.error('[People] Load error:', e.message); }
+}
+function savePeople() {
+  try { fs.writeFileSync(PEOPLE_FILE, JSON.stringify(people, null, 2)); }
+  catch(e) { console.error('[People] Save error:', e.message); }
+}
+loadPeople();
+
+// ─── Conflict rules (persisted) ───────────────────────────────────────────────
+// [{id, name, ifPerson, ifSlotType, ifSlot, thenPerson, thenSlotType, thenSlot}]
+// "If [ifPerson] is scheduled on [ifSlotType] [ifSlot], move [thenPerson] to [thenSlotType] [thenSlot]"
+let rules = [];
+function loadRules() {
+  try {
+    if (fs.existsSync(RULES_FILE)) {
+      rules = JSON.parse(fs.readFileSync(RULES_FILE, 'utf8'));
+      console.log(`[Rules] Loaded ${rules.length} conflict rules`);
+    }
+  } catch(e) { console.error('[Rules] Load error:', e.message); }
+}
+function saveRules() {
+  try { fs.writeFileSync(RULES_FILE, JSON.stringify(rules, null, 2)); }
+  catch(e) { console.error('[Rules] Save error:', e.message); }
+}
+loadRules();
 
 // ─── Default state ────────────────────────────────────────────────────────────
 let state = {
@@ -212,8 +249,10 @@ if (PCO_USE_PAT && PCO_CLIENT_ID && PCO_CLIENT_SECRET) {
 }
 
 function getPCOAuthHeader() {
-  if (PCO_USE_PAT) {
-    return 'Basic ' + Buffer.from(`${PCO_CLIENT_ID}:${PCO_CLIENT_SECRET}`).toString('base64');
+  const id  = localConfig.PCO_CLIENT_ID     || PCO_CLIENT_ID;
+  const sec = localConfig.PCO_CLIENT_SECRET || PCO_CLIENT_SECRET;
+  if (id && sec) {
+    return 'Basic ' + Buffer.from(`${id}:${sec}`).toString('base64');
   }
   return `Bearer ${pcoAccessToken}`;
 }
@@ -276,7 +315,38 @@ app.get('/auth/callback', async (req, res) => {
 
 // Auth status endpoint
 app.get('/auth/status', (req, res) => {
-  res.json({ connected: !!pcoAccessToken, pat: PCO_USE_PAT, expiry: pcoTokenExpiry });
+  const id  = localConfig.PCO_CLIENT_ID  || PCO_CLIENT_ID;
+  const sec = localConfig.PCO_CLIENT_SECRET || PCO_CLIENT_SECRET;
+  const connected = !!(pcoAccessToken || (id && sec));
+  res.json({ connected, pat: !!(localConfig.PCO_USE_PAT || PCO_USE_PAT), expiry: pcoTokenExpiry });
+});
+
+// Save PCO credentials at runtime (entered via UI)
+app.post('/auth/credentials', (req, res) => {
+  const { appId, token } = req.body;
+  if (!appId || !token) return res.status(400).json({ error: 'Missing appId or token' });
+  // Set as PAT mode
+  localConfig.PCO_CLIENT_ID     = appId.trim();
+  localConfig.PCO_CLIENT_SECRET = token.trim();
+  pcoAccessToken = '__PAT__';
+  // Persist to config.js so it survives restarts
+  const configPath = require('path').join(__dirname, 'config.js');
+  const configContent = `module.exports = {\n  PCO_CLIENT_ID:     '${appId.trim()}',\n  PCO_CLIENT_SECRET: '${token.trim()}',\n  PCO_REDIRECT_URI:  'http://localhost:3000/auth/callback',\n  PCO_USE_PAT: true,\n};\n`;
+  require('fs').writeFileSync(configPath, configContent);
+  console.log('[PCO] Credentials saved via UI');
+  broadcast({ type: 'pco_auth', payload: { connected: true } });
+  res.json({ ok: true });
+});
+
+// Disconnect PCO
+app.post('/auth/disconnect', (req, res) => {
+  pcoAccessToken = null;
+  localConfig.PCO_CLIENT_ID = '';
+  localConfig.PCO_CLIENT_SECRET = '';
+  const configPath = require('path').join(__dirname, 'config.js');
+  require('fs').writeFileSync(configPath, `module.exports = {\n  PCO_CLIENT_ID: '',\n  PCO_CLIENT_SECRET: '',\n  PCO_REDIRECT_URI: 'http://localhost:3000/auth/callback',\n  PCO_USE_PAT: false,\n};\n`);
+  broadcast({ type: 'pco_auth', payload: { connected: false } });
+  res.json({ ok: true });
 });
 
 // Token refresh helper
@@ -411,6 +481,86 @@ app.get('/api/pco/*', async (req, res) => {
   }
 });
 
+// ─── People library endpoints ─────────────────────────────────────────────────
+app.get('/api/people', (req, res) => res.json(people));
+
+app.post('/api/people', (req, res) => {
+  const { name, photo, defaultIemSlot, defaultProdPosition, notes } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const existing = people.findIndex(p => p.name === name);
+  const person = { id: existing >= 0 ? people[existing].id : 'person_' + Date.now(), name, photo: photo||'', defaultIemSlot: defaultIemSlot??null, defaultProdPosition: defaultProdPosition||null, notes: notes||'' };
+  if (existing >= 0) people[existing] = person;
+  else people.push(person);
+  // Also sync to tags
+  tags[name] = { iemSlot: defaultIemSlot??null, micSlot: defaultIemSlot??null, prodPosition: defaultProdPosition||null, photo: photo||'' };
+  savePeople(); saveTags();
+  console.log(`[People] Saved: "${name}"`);
+  res.json({ ok: true, person });
+});
+
+app.delete('/api/people/:id', (req, res) => {
+  people = people.filter(p => p.id !== req.params.id);
+  savePeople();
+  res.json({ ok: true });
+});
+
+// ─── Conflict rules endpoints ─────────────────────────────────────────────────
+app.get('/api/rules', (req, res) => res.json(rules));
+
+app.post('/api/rules', (req, res) => {
+  const rule = { id: 'rule_' + Date.now(), ...req.body };
+  rules.push(rule);
+  saveRules();
+  res.json({ ok: true, rule });
+});
+
+app.delete('/api/rules/:id', (req, res) => {
+  rules = rules.filter(r => r.id !== req.params.id);
+  saveRules();
+  res.json({ ok: true });
+});
+
+// Apply conflict rules to a given state snapshot — returns modified state + changelog
+app.post('/api/rules/apply', (req, res) => {
+  const { state: s } = req.body;
+  if (!s) return res.status(400).json({ error: 'state required' });
+  const changes = [];
+
+  rules.forEach(rule => {
+    // Check if the trigger person is scheduled
+    const allSlots = [...s.iems, ...s.mics, ...s.prod];
+    const triggerScheduled = allSlots.some(slot => slot.name === rule.ifPerson);
+    if (!triggerScheduled) return;
+
+    // Find where thenPerson currently is
+    const getArr = (type) => type === 'iem' ? s.iems : type === 'mic' ? s.mics : s.prod;
+    const thenArr = getArr(rule.thenSlotType);
+    const currentSlot = thenArr.findIndex(slot => slot.name === rule.thenPerson);
+    if (currentSlot === -1) return; // thenPerson not scheduled, skip
+
+    // Find the target slot
+    const targetIdx = rule.thenSlot; // 0-based index
+    if (targetIdx === undefined || targetIdx === currentSlot) return;
+
+    // Swap: move thenPerson to targetIdx, whoever is there goes to currentSlot
+    const displaced = thenArr[targetIdx]?.name || '';
+    const movedPerson = thenArr[currentSlot].name;
+
+    thenArr[currentSlot].name = displaced;
+    thenArr[targetIdx].name = movedPerson;
+
+    // Fix photos
+    const movedPhoto = thenArr[targetIdx].photo;
+    const displacedPhoto = thenArr[currentSlot].photo;
+    thenArr[targetIdx].photo = displacedPhoto || movedPhoto;
+    thenArr[currentSlot].photo = '';
+
+    changes.push(`Rule fired: "${rule.ifPerson}" scheduled → moved "${rule.thenPerson}" to ${rule.thenSlotType.toUpperCase()} ${targetIdx + 1}${displaced ? `, displaced "${displaced}"` : ''}`);
+  });
+
+  res.json({ state: s, changes });
+});
+
 // ─── Name tags endpoints ──────────────────────────────────────────────────────
 
 // Get all tags
@@ -534,6 +684,15 @@ app.get('/api/playlist/:id/preview', (req, res) => {
   const svc = playlist.find(s => s.id === req.params.id);
   if (!svc) return res.status(404).json({ error: 'Not found' });
   res.json(svc.state);
+});
+
+// Trigger OTA install from browser button
+app.post('/api/install-update', (req, res) => {
+  res.json({ ok: true });
+  setTimeout(() => {
+    // Signal Electron main process via IPC if available
+    try { require('electron').autoUpdater.quitAndInstall(); } catch(e) {}
+  }, 500);
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
