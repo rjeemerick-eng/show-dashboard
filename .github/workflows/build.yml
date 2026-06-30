@@ -23,11 +23,19 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Decode certificate
+        run: |
+          echo "${{ secrets.CSC_LINK }}" | base64 --decode > /tmp/certificate.p12
+          security create-keychain -p "" build.keychain
+          security import /tmp/certificate.p12 -k build.keychain -P "${{ secrets.CSC_KEY_PASSWORD }}" -T /usr/bin/codesign
+          security list-keychains -s build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+
       - name: Build and publish DMG
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
