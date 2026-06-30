@@ -1,34 +1,49 @@
-"build": {
-  "appId": "com.showdashboard.app",
-  "productName": "Show Dashboard",
-  "copyright": "Copyright 2024",
-  "mac": {
-    "category": "public.app-category.productivity",
-    "target": [
-      {"target": "dmg", "arch": ["universal"]}
-    ],
-    "notarize": {
-      "teamId": "9BX9Z5V9U4"
+{
+  "name": "show-dashboard",
+  "version": "1.0.1",
+  "description": "Live mic, IEM, and production crew dashboard",
+  "main": "src/main.js",
+  "author": {
+    "name": "RJ Emerick",
+    "email": "rjeemerick@gmail.com"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder build --mac",
+    "build:dmg": "electron-builder build --mac dmg",
+    "publish": "electron-builder build --mac --publish always"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.9.1",
+    "electron-updater": "^6.1.8",
+    "@electron/notarize": "^2.3.0"
+  },
+  "build": {
+    "appId": "com.showdashboard.app",
+    "productName": "Show Dashboard",
+    "copyright": "Copyright 2024",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [{"target": "dmg", "arch": ["universal"]}],
+      "notarize": {"teamId": "9BX9Z5V9U4"}
+    },
+    "dmg": {
+      "title": "Show Dashboard",
+      "window": {"width": 540, "height": 380}
+    },
+    "files": ["src/**/*", "public/**/*", "server.js", "config.js", "assets/**/*"],
+    "extraResources": [{"from": "public", "to": "public"}],
+    "publish": {
+      "provider": "github",
+      "owner": "rjeemerick-eng",
+      "repo": "show-dashboard",
+      "releaseType": "release"
     }
-  },
-  "dmg": {
-    "title": "Show Dashboard",
-    "window": {"width": 540, "height": 380}
-  },
-  "files": [
-    "src/**/*",
-    "public/**/*",
-    "server.js",
-    "config.js",
-    "assets/**/*"
-  ],
-  "extraResources": [
-    {"from": "public", "to": "public"}
-  ],
-  "publish": {
-    "provider": "github",
-    "owner": "rjeemerick-eng",
-    "repo": "show-dashboard",
-    "releaseType": "release"
   }
 }
