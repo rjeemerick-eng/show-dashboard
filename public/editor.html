@@ -117,6 +117,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   <div class="hdr-right">
     <button class="btn" onclick="togglePanel('pco-panel')"><i class="ti ti-users"></i> Planning Center</button>
     <button class="btn" onclick="togglePanel('playlist-panel')"><i class="ti ti-playlist"></i> Services</button>
+    <button class="btn" onclick="togglePanel('people-panel')"><i class="ti ti-address-book"></i> People</button>
+    <button class="btn" onclick="togglePanel('rules-panel')"><i class="ti ti-git-branch"></i> Rules</button>
     <button class="btn" onclick="togglePanel('tag-panel')"><i class="ti ti-tags"></i> Tags</button>
     <button class="btn" onclick="window.open('/display','_blank')"><i class="ti ti-external-link"></i> Display</button>
   </div>
@@ -131,7 +133,19 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       <span id="pco-auth-label" style="font-size:11px;color:var(--text-mid)">Checking…</span>
     </div>
   </div>
-  <div id="pco-connect-msg" style="display:none;font-size:12px;color:var(--text-mid);margin-bottom:10px">Add credentials to config.js to connect.</div>
+  <div id="pco-connect-msg" style="display:none">
+    <div style="font-size:12px;color:var(--text-mid);margin-bottom:10px">Enter your Planning Center credentials to connect.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:flex-end;margin-bottom:8px">
+      <div class="pf"><label>Application ID</label>
+        <input type="text" id="pco-cred-appid" placeholder="Your PCO App ID"></div>
+      <div class="pf"><label>Personal Access Token</label>
+        <input type="password" id="pco-cred-token" placeholder="pco_pat_..."></div>
+      <button class="btn success" onclick="savePCOCredentials()"><i class="ti ti-plug"></i> Connect</button>
+    </div>
+    <div style="font-size:11px;color:var(--text-dim)">
+      Get your token at <a href="#" onclick="openExternal('https://api.planningcenteronline.com/oauth/applications')" style="color:var(--blue)">api.planningcenteronline.com/oauth/applications</a> → Personal Access Tokens
+    </div>
+  </div>
   <div id="pco-controls" style="display:none">
     <div class="field-row four" style="margin-bottom:10px">
       <div class="pf"><label>Service type</label>
@@ -214,6 +228,72 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 <!-- Shared datalist for all combo inputs -->
 <datalist id="pool-list"></datalist>
+
+<!-- PEOPLE LIBRARY PANEL -->
+<div class="panel" id="people-panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div class="panel-title" style="margin:0">People library <span id="people-count" style="font-size:12px;font-weight:400;color:var(--text-dim)"></span></div>
+    <button class="btn success" onclick="showAddPerson()"><i class="ti ti-plus"></i> Add person</button>
+  </div>
+  <div id="add-person-form" style="display:none;background:var(--s3);border:1px solid var(--border-mid);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:600;margin-bottom:10px">Add / edit person</div>
+    <div class="field-row two" style="margin-bottom:8px">
+      <div class="pf"><label>Full name (match PCO exactly)</label><input type="text" id="pp-name" placeholder="e.g. Ruben Mundo"></div>
+      <div class="pf"><label>Photo URL</label><input type="text" id="pp-photo" placeholder="https://…"></div>
+    </div>
+    <div class="field-row two" style="margin-bottom:8px">
+      <div class="pf"><label>Default IEM slot</label><select id="pp-iem"><option value="">— none —</option></select></div>
+      <div class="pf"><label>Default production position</label>
+        <select id="pp-prod">
+          <option value="">— none —</option>
+          <option value="cg">CG</option><option value="cam">Camera</option>
+          <option value="foh">FOH</option><option value="mon">Monitors</option>
+          <option value="light">Lighting</option><option value="stage">Stage hand</option>
+          <option value="dir">Director / Producer</option><option value="stream">Streaming / Shader</option>
+        </select>
+      </div>
+    </div>
+    <div class="pf" style="margin-bottom:10px"><label>Notes</label><input type="text" id="pp-notes" placeholder="Instrument, role, notes"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="document.getElementById('add-person-form').style.display='none'">Cancel</button>
+      <button class="btn success" onclick="savePerson()"><i class="ti ti-check"></i> Save</button>
+    </div>
+  </div>
+  <div id="people-list" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto"></div>
+</div>
+
+<!-- CONFLICT RULES PANEL -->
+<div class="panel" id="rules-panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div>
+      <div class="panel-title" style="margin:0">Conflict rules</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Auto-reassign when specific people are scheduled together</div>
+    </div>
+    <button class="btn success" onclick="showAddRule()"><i class="ti ti-plus"></i> Add rule</button>
+  </div>
+  <div id="add-rule-form" style="display:none;background:var(--s3);border:1px solid var(--border-mid);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:600;margin-bottom:10px">New conflict rule</div>
+    <div style="font-size:12px;color:var(--text-mid);margin-bottom:10px;line-height:2;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+      <strong style="color:var(--text)">If</strong>
+      <select id="rule-if-person" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit"><option value="">select person…</option></select>
+      <span>is scheduled, move</span>
+      <select id="rule-then-person" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit"><option value="">select person…</option></select>
+      <span>to</span>
+      <select id="rule-then-type" onchange="updateRuleSlots()" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit">
+        <option value="iem">IEM</option><option value="mic">Mic</option><option value="prod">Production</option>
+      </select>
+      <span>slot</span>
+      <select id="rule-then-slot" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit"></select>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn" onclick="document.getElementById('add-rule-form').style.display='none'">Cancel</button>
+      <button class="btn success" onclick="saveRule()"><i class="ti ti-check"></i> Save rule</button>
+    </div>
+  </div>
+  <div id="rules-list" style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:12px;color:var(--text-dim)">No rules yet. Add one above.</div>
+  </div>
+</div>
 
 <!-- MAIN: three-column assignment grid -->
 <div class="main">
@@ -326,11 +406,170 @@ async function preloadTagsPool(){
   try {
     savedTags = await fetch('/api/tags').then(r => r.json());
     const pool = await fetch('/api/tags/pool').then(r => r.json());
+    // Also merge people library
+    const ppl = await fetch('/api/people').then(r => r.json());
+    ppl.forEach(p => {
+      if (!pool.find(x => x.name === p.name)) {
+        pool.push({ name: p.name, photo: p.photo||'', position: '', teamName: '', iemSlot: p.defaultIemSlot, prodPosition: p.defaultProdPosition });
+      }
+    });
     if (pool.length) {
       stagingPool = pool.map(p => ({ ...p, classified: { type: p.prodPosition ? 'prod' : 'iem', sub: p.prodPosition || 'iem' } }));
-      render(); // refresh dropdowns with tag names
+      render();
     }
+    // Load people library and rules into memory
+    peopleLibrary = ppl;
+    rulesData = await fetch('/api/rules').then(r => r.json());
   } catch(e) {}
+}
+
+// ── People library ─────────────────────────────────────────────────────────────
+let peopleLibrary = [];
+
+async function loadPeoplePanel() {
+  peopleLibrary = await fetch('/api/people').then(r => r.json());
+  renderPeopleList();
+  const sel = document.getElementById('pp-iem');
+  if (sel && state) {
+    sel.innerHTML = '<option value="">— none —</option>' +
+      state.iems.map((c,i) => `<option value="${i}">${c.ch} — ${c.role}</option>`).join('');
+  }
+}
+
+function renderPeopleList() {
+  const el = document.getElementById('people-list');
+  const count = document.getElementById('people-count');
+  if (count) count.textContent = `(${peopleLibrary.length} people)`;
+  if (!peopleLibrary.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">No people saved yet.</div>'; return; }
+  const PROD_LABELS = {cg:'CG',cam:'Camera',foh:'FOH',mon:'Monitors',light:'Lighting',stage:'Stage hand',dir:'Director',stream:'Streaming'};
+  el.innerHTML = peopleLibrary.map(p => {
+    const col = colorFor(p.name);
+    const av = p.photo
+      ? `<img src="${p.photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'">`
+      : `<div style="width:32px;height:32px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">${initials(p.name)}</div>`;
+    const slots = [
+      p.defaultIemSlot !== null && p.defaultIemSlot !== undefined ? `IEM ${Number(p.defaultIemSlot)+1}` : null,
+      p.defaultProdPosition ? PROD_LABELS[p.defaultProdPosition] : null
+    ].filter(Boolean).join(' · ');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+      ${av}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600">${p.name}</div>
+        <div style="font-size:11px;color:var(--text-dim)">${slots||'No default slot'}</div>
+      </div>
+      <div style="display:flex;gap:5px">
+        <button onclick="editPerson('${p.id}')" style="padding:3px 7px;border-radius:5px;border:1px solid var(--border-mid);background:none;color:var(--text-mid);cursor:pointer;font-size:11px"><i class="ti ti-edit"></i></button>
+        <button onclick="deletePerson('${p.id}')" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showAddPerson() {
+  document.getElementById('add-person-form').style.display = 'block';
+  ['pp-name','pp-photo','pp-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('pp-iem').value = '';
+  document.getElementById('pp-prod').value = '';
+}
+
+function editPerson(id) {
+  const p = peopleLibrary.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('add-person-form').style.display = 'block';
+  document.getElementById('pp-name').value = p.name;
+  document.getElementById('pp-photo').value = p.photo || '';
+  document.getElementById('pp-iem').value = p.defaultIemSlot !== null && p.defaultIemSlot !== undefined ? String(p.defaultIemSlot) : '';
+  document.getElementById('pp-prod').value = p.defaultProdPosition || '';
+  document.getElementById('pp-notes').value = p.notes || '';
+}
+
+async function savePerson() {
+  const name = document.getElementById('pp-name').value.trim();
+  if (!name) { toast('Enter a name', '#f59e0b'); return; }
+  const iemVal = document.getElementById('pp-iem').value;
+  const body = { name, photo: document.getElementById('pp-photo').value.trim(), defaultIemSlot: iemVal !== '' ? parseInt(iemVal) : null, defaultProdPosition: document.getElementById('pp-prod').value || null, notes: document.getElementById('pp-notes').value.trim() };
+  await fetch('/api/people', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  document.getElementById('add-person-form').style.display = 'none';
+  savedTags = await fetch('/api/tags').then(r => r.json());
+  await loadPeoplePanel();
+  toast(`<i class="ti ti-check"></i> ${name} saved to library`);
+  preloadTagsPool();
+}
+
+async function deletePerson(id) {
+  if (!confirm('Remove from library?')) return;
+  await fetch(`/api/people/${id}`, { method:'DELETE' });
+  loadPeoplePanel();
+}
+
+// ── Conflict rules ─────────────────────────────────────────────────────────────
+let rulesData = [];
+
+async function loadRulesPanel() {
+  rulesData = await fetch('/api/rules').then(r => r.json());
+  renderRulesList();
+  populateRulePeopleDropdowns();
+  updateRuleSlots();
+}
+
+function populateRulePeopleDropdowns() {
+  const allNames = [...new Set([...Object.keys(savedTags), ...peopleLibrary.map(p => p.name)])].sort();
+  const opts = '<option value="">select person…</option>' + allNames.map(n => `<option value="${n}">${n}</option>`).join('');
+  ['rule-if-person','rule-then-person'].forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=opts; });
+}
+
+function updateRuleSlots() {
+  const typeEl = document.getElementById('rule-then-type');
+  if (!typeEl || !state) return;
+  const arr = typeEl.value === 'iem' ? state.iems : typeEl.value === 'mic' ? state.mics : state.prod;
+  const sel = document.getElementById('rule-then-slot');
+  if (sel) sel.innerHTML = arr.map((s,i) => `<option value="${i}">${i+1} — ${s.role||s.position||''}</option>`).join('');
+}
+
+function showAddRule() {
+  document.getElementById('add-rule-form').style.display = 'block';
+  populateRulePeopleDropdowns();
+  updateRuleSlots();
+}
+
+async function saveRule() {
+  const ifPerson = document.getElementById('rule-if-person').value;
+  const thenPerson = document.getElementById('rule-then-person').value;
+  const thenType = document.getElementById('rule-then-type').value;
+  const thenSlot = parseInt(document.getElementById('rule-then-slot').value);
+  if (!ifPerson || !thenPerson) { toast('Select both people', '#f59e0b'); return; }
+  const arr = thenType === 'iem' ? state.iems : thenType === 'mic' ? state.mics : state.prod;
+  const label = `If ${ifPerson} is scheduled → move ${thenPerson} to ${thenType.toUpperCase()} ${thenSlot+1} (${arr[thenSlot]?.role||''})`;
+  await fetch('/api/rules', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ ifPerson, thenPerson, thenSlotType: thenType, thenSlot, label }) });
+  document.getElementById('add-rule-form').style.display = 'none';
+  await loadRulesPanel();
+  toast('<i class="ti ti-git-branch"></i> Rule saved');
+}
+
+function renderRulesList() {
+  const el = document.getElementById('rules-list');
+  if (!rulesData.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">No rules yet.</div>'; return; }
+  el.innerHTML = rulesData.map(r => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border:1px solid var(--border-mid);background:var(--s3)">
+      <i class="ti ti-git-branch" style="color:var(--amber);font-size:14px;flex-shrink:0"></i>
+      <div style="flex:1;font-size:12px">${r.label||r.ifPerson+' → '+r.thenPerson}</div>
+      <button onclick="deleteRule('${r.id}')" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+}
+
+async function deleteRule(id) { await fetch(`/api/rules/${id}`,{method:'DELETE'}); loadRulesPanel(); }
+
+async function applyConflictRules() {
+  if (!rulesData.length) return;
+  const result = await fetch('/api/rules/apply', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({state}) }).then(r => r.json());
+  if (result.changes && result.changes.length) {
+    state = result.state; render(); push();
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--s2);border:1px solid rgba(245,158,11,0.5);color:#fbbf24;padding:12px 20px;border-radius:10px;font-size:12px;z-index:9999;max-width:500px';
+    banner.innerHTML = `<div style="font-weight:600;margin-bottom:6px"><i class="ti ti-git-branch"></i> ${result.changes.length} rule${result.changes.length>1?'s':''} applied</div>` + result.changes.map(c=>`<div style="font-size:11px;opacity:0.8">• ${c}</div>`).join('');
+    document.body.appendChild(banner);
+    setTimeout(()=>banner.remove(), 6000);
+  }
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────────
@@ -556,7 +795,7 @@ function addProdSlot(){
 
 // ── Panel toggle ───────────────────────────────────────────────────────────────
 function togglePanel(id){
-  const panels=['pco-panel','playlist-panel','tag-panel'];
+  const panels=['pco-panel','playlist-panel','tag-panel','people-panel','rules-panel'];
   panels.forEach(pid=>{
     const el=document.getElementById(pid);
     if(pid===id){el.classList.toggle('open')}
@@ -565,6 +804,8 @@ function togglePanel(id){
   if(id==='playlist-panel'&&document.getElementById('playlist-panel').classList.contains('open'))loadPlaylistUI();
   if(id==='tag-panel'&&document.getElementById('tag-panel').classList.contains('open'))loadTags();
   if(id==='pco-panel'&&document.getElementById('pco-panel').classList.contains('open'))checkPCOAuth();
+  if(id==='people-panel'&&document.getElementById('people-panel').classList.contains('open'))loadPeoplePanel();
+  if(id==='rules-panel'&&document.getElementById('rules-panel').classList.contains('open'))loadRulesPanel();
 }
 
 // ── PCO ────────────────────────────────────────────────────────────────────────
@@ -574,15 +815,37 @@ async function checkPCOAuth(){
     const dot=document.getElementById('pco-auth-dot');
     const lbl=document.getElementById('pco-auth-label');
     if(s.connected){
-      dot.style.background='var(--green)';lbl.textContent='Connected';
+      dot.style.background='var(--green)';
+      lbl.innerHTML='Connected &nbsp;<button class="btn" style="padding:2px 8px;font-size:11px" onclick="disconnectPCO()">Disconnect</button>';
       document.getElementById('pco-connect-msg').style.display='none';
       document.getElementById('pco-controls').style.display='block';
       fetchPCOServices();
     } else {
-      dot.style.background='#555';lbl.textContent='Not connected — check config.js';
+      dot.style.background='#555';
+      lbl.textContent='Not connected';
       document.getElementById('pco-connect-msg').style.display='block';
+      document.getElementById('pco-controls').style.display='none';
     }
   }catch(e){}
+}
+
+async function savePCOCredentials(){
+  const appId = document.getElementById('pco-cred-appid').value.trim();
+  const token = document.getElementById('pco-cred-token').value.trim();
+  if(!appId||!token){toast('Enter both App ID and token','#f59e0b');return;}
+  const r = await fetch('/auth/credentials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({appId,token})});
+  const d = await r.json();
+  if(d.ok){toast('<i class="ti ti-check"></i> Connected to Planning Center');checkPCOAuth();}
+  else toast('Failed to connect','#ef4444');
+}
+
+async function disconnectPCO(){
+  await fetch('/auth/disconnect',{method:'POST'});
+  checkPCOAuth();
+}
+
+function openExternal(url){
+  window.open(url,'_blank');
 }
 
 async function fetchPCOServices(){
@@ -697,6 +960,7 @@ async function loadRoster(isRefresh=false){
     status.innerHTML=`<span style="color:#7eb8f5">${stagingPool.length} people loaded${tagCount?`, ${tagCount} auto-assigned`:''}</span>`;
     document.getElementById('refresh-btn').style.display='inline-flex';
     render();push();
+    applyConflictRules();
   }catch(e){status.textContent='Error: '+e.message}
 }
 
