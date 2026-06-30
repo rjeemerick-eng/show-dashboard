@@ -31,30 +31,4 @@
       "category": "public.app-category.productivity",
       "target": [
         { "target": "dmg", "arch": ["universal"] }
-      ],
-      "icon": "assets/icon.icns"
-    },
-    "dmg": {
-      "title": "Show Dashboard",
-      "background": "assets/dmg-background.png",
-      "window": { "width": 540, "height": 380 }
-    },
-    "files": [
-      "src/**/*",
-      "public/**/*",
-      "server.js",
-      "config.js",
-      "assets/**/*"
-    ],
-    "extraResources": [
-      { "from": "public", "to": "public" }
-    ],
-    "publish": {
-      "provider": "github",
-      "owner": "rjeemerick-eng",
-      "repo": "show-dashboard",
-      "releaseType": "release"
-    },
-    "afterSign": "scripts/notarize.js"
-  }
-}
+      ]
