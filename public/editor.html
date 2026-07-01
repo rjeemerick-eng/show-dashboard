@@ -128,7 +128,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <div class="panel-title" style="margin:0">Planning Center</div>
     <div style="display:flex;align-items:center;gap:8px">
       <div id="pco-auth-dot" style="width:7px;height:7px;border-radius:50%;background:#444"></div>
-      <span id="pco-auth-label" style="font-size:11px;color:var(--text-mid)">Checking…</span>
+      <span id="pco-auth-label" style="font-size:11px;color:var(--text-mid)">Not connected</span>
     </div>
   </div>
   <div id="pco-connect-msg" style="display:none">
@@ -238,7 +238,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Planning Center</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <div id="pco-auth-dot" style="width:7px;height:7px;border-radius:50%;background:#444;flex-shrink:0"></div>
-          <span id="pco-auth-label" style="font-size:12px;color:var(--text-mid)">Checking…</span>
+          <span id="pco-auth-label" style="font-size:12px;color:var(--text-mid)">Not connected</span>
         </div>
         <div id="pco-connect-msg" style="display:none">
           <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Enter your Planning Center App ID and Personal Access Token to connect.</div>
@@ -534,8 +534,8 @@ function connect(){
       const firstLoad = !state;
       state=msg.payload;
       render();
-      // On first connect, pre-load tags into the pool silently
-      if(firstLoad) preloadTagsPool();
+      // On first connect, pre-load tags and check PCO auth
+      if(firstLoad) { preloadTagsPool(); checkPCOAuth(); }
     }
     if(msg.type==='playlist')handlePlaylist(msg.payload);
     if(msg.type==='went_live'){
