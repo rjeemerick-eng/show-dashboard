@@ -1,6 +1,6 @@
 {
   "name": "show-dashboard",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "description": "Live mic, IEM, and production crew dashboard",
   "main": "src/main.js",
   "author": {
@@ -16,13 +16,12 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "ws": "^8.16.0",
-    "electron-updater": "^6.1.8"
+    "ws": "^8.16.0"
   },
   "devDependencies": {
     "electron": "^29.0.0",
     "electron-builder": "^24.9.1",
-    "@electron/notarize": "^2.3.0"
+    "electron-updater": "^6.1.8"
   },
   "build": {
     "appId": "com.showdashboard.app",
@@ -30,20 +29,41 @@
     "copyright": "Copyright 2024",
     "mac": {
       "category": "public.app-category.productivity",
-      "target": [{"target": "dmg", "arch": ["universal"]}],
-      "notarize": {"teamId": "9BX9Z5V9U4"}
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ]
     },
     "dmg": {
       "title": "Show Dashboard",
-      "window": {"width": 540, "height": 380}
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
-    "files": ["src/**/*", "public/**/*", "server.js", "config.js", "assets/**/*"],
-    "extraResources": [{"from": "public", "to": "public"}],
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "server.js",
+      "config.js",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "public",
+        "to": "public"
+      }
+    ],
     "publish": {
       "provider": "github",
       "owner": "rjeemerick-eng",
       "repo": "show-dashboard",
       "releaseType": "release"
-    }
+    },
+    "afterSign": "scripts/notarize.js"
   }
 }

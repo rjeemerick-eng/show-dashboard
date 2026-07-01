@@ -713,9 +713,8 @@ app.get('/api/version', (req, res) => {
 // Trigger update check from browser
 app.post('/api/check-update', (req, res) => {
   res.json({ checking: true });
-  // Signal main process to check — works when running in Electron
-  try { require('electron').ipcMain; } catch(e) {}
-  // The Electron main process checks on its own interval — this just confirms
+  // Set a global flag that main.js polls
+  global.triggerUpdateCheck = true;
   console.log('[Update] Manual check triggered from UI');
 });
 

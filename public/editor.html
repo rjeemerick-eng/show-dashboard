@@ -115,13 +115,10 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <span id="live-svc" style="font-size:11px;color:var(--text-dim)"></span>
   </div>
   <div class="hdr-right">
-    <button class="btn" onclick="togglePanel('pco-panel')"><i class="ti ti-users"></i> Planning Center</button>
+    <button class="btn" id="pco-load-btn" style="display:none" onclick="togglePanel('pco-panel')"><i class="ti ti-cloud-download"></i> Load from PCO</button>
     <button class="btn" onclick="togglePanel('playlist-panel')"><i class="ti ti-playlist"></i> Services</button>
-    <button class="btn" onclick="togglePanel('people-panel')"><i class="ti ti-address-book"></i> People</button>
-    <button class="btn" onclick="togglePanel('rules-panel')"><i class="ti ti-git-branch"></i> Rules</button>
-    <button class="btn" onclick="togglePanel('tag-panel')"><i class="ti ti-tags"></i> Tags</button>
-    <button class="btn" onclick="togglePanel('settings-panel')"><i class="ti ti-settings"></i> Settings</button>
     <button class="btn" onclick="window.open('/display','_blank')"><i class="ti ti-external-link"></i> Display</button>
+    <button class="btn" onclick="togglePanel('settings-panel')"><i class="ti ti-settings"></i> Settings</button>
   </div>
 </div>
 
@@ -232,32 +229,152 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 <!-- SETTINGS PANEL -->
 <div class="panel" id="settings-panel">
-  <div class="panel-title">Settings</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-    <!-- Updates -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+
+    <!-- LEFT: PCO + Updates -->
     <div>
-      <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Software update</div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-        <div id="version-label" style="font-size:12px;color:var(--text-mid)">Version —</div>
-        <div id="update-status" style="font-size:11px;color:var(--text-dim)"></div>
+      <!-- Planning Center -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Planning Center</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div id="pco-auth-dot" style="width:7px;height:7px;border-radius:50%;background:#444;flex-shrink:0"></div>
+          <span id="pco-auth-label" style="font-size:12px;color:var(--text-mid)">Checking…</span>
+        </div>
+        <div id="pco-connect-msg" style="display:none">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Enter your Planning Center App ID and Personal Access Token to connect.</div>
+          <div class="field-row" style="margin-bottom:6px">
+            <div class="pf"><label>Application ID</label>
+              <input type="text" id="pco-cred-appid" placeholder="Your PCO App ID"></div>
+          </div>
+          <div class="field-row" style="margin-bottom:8px">
+            <div class="pf"><label>Personal Access Token</label>
+              <input type="password" id="pco-cred-token" placeholder="pco_pat_..."></div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn success" onclick="savePCOCredentials()"><i class="ti ti-plug"></i> Connect</button>
+            <a href="https://api.planningcenteronline.com/oauth/applications" target="_blank" style="font-size:11px;color:var(--blue)">Get token ↗</a>
+          </div>
+        </div>
+        <div id="pco-controls" style="display:none">
+          <div class="field-row two" style="margin-bottom:8px">
+            <div class="pf"><label>Service type</label>
+              <select id="pco-svc-type" onchange="fetchUpcomingForType()"><option value="">Select…</option></select>
+            </div>
+            <div class="pf"><label>Plan / date</label>
+              <select id="pco-plan-sel"><option value="">Select…</option></select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn" onclick="loadRoster(false)"><i class="ti ti-users"></i> Load roster</button>
+            <button class="btn" id="refresh-btn" style="display:none" onclick="loadRoster(true)" title="Add new names only"><i class="ti ti-refresh"></i> Refresh</button>
+            <button class="btn" onclick="loadFromTags()"><i class="ti ti-tag"></i> Load from tags</button>
+          </div>
+          <div id="pco-status" style="font-size:11px;color:var(--text-mid);margin-top:6px"></div>
+        </div>
       </div>
-      <div style="display:flex;gap:8px">
+
+      <!-- Updates -->
+      <div style="border-top:1px solid var(--border);padding-top:16px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Software update</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div id="version-label" style="font-size:12px;color:var(--text-mid)">Version —</div>
+          <div id="update-status" style="font-size:11px;color:var(--text-dim)"></div>
+        </div>
         <button class="btn" onclick="checkForUpdates()"><i class="ti ti-refresh"></i> Check for updates</button>
+        <div id="update-result" style="margin-top:6px;font-size:11px;color:var(--text-dim)"></div>
       </div>
-      <div id="update-result" style="margin-top:8px;font-size:12px;color:var(--text-mid)"></div>
     </div>
-    <!-- App info -->
+
+    <!-- RIGHT: People, Tags, Rules -->
     <div>
-      <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">About</div>
-      <div style="font-size:12px;color:var(--text-mid);line-height:2">
-        <div>Show Dashboard</div>
-        <div style="color:var(--text-dim)">Live production crew management</div>
-        <div style="margin-top:6px"><a href="#" onclick="window.open('https://github.com/rjeemerick-eng/show-dashboard','_blank')" style="color:var(--blue);font-size:11px">github.com/rjeemerick-eng/show-dashboard</a></div>
+      <!-- People library -->
+      <div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase">People library <span id="people-count" style="font-weight:400"></span></div>
+          <button class="btn" style="padding:3px 8px;font-size:11px" onclick="showAddPerson()"><i class="ti ti-plus"></i> Add</button>
+        </div>
+        <div id="add-person-form" style="display:none;background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px;margin-bottom:8px">
+          <div class="field-row two" style="margin-bottom:6px">
+            <div class="pf"><label>Full name (match PCO)</label><input type="text" id="pp-name" placeholder="e.g. Ruben Mundo"></div>
+            <div class="pf"><label>Photo URL</label><input type="text" id="pp-photo" placeholder="https://…"></div>
+          </div>
+          <div class="field-row two" style="margin-bottom:6px">
+            <div class="pf"><label>Default IEM slot</label><select id="pp-iem"><option value="">— none —</option></select></div>
+            <div class="pf"><label>Default production position</label>
+              <select id="pp-prod">
+                <option value="">— none —</option>
+                <option value="cg">CG</option><option value="cam">Camera</option>
+                <option value="foh">FOH</option><option value="mon">Monitors</option>
+                <option value="light">Lighting</option><option value="stage">Stage hand</option>
+                <option value="dir">Director</option><option value="stream">Streaming</option>
+              </select>
+            </div>
+          </div>
+          <div class="pf" style="margin-bottom:8px"><label>Notes</label><input type="text" id="pp-notes" placeholder="Instrument, role…"></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn" onclick="document.getElementById('add-person-form').style.display='none'">Cancel</button>
+            <button class="btn success" onclick="savePerson()"><i class="ti ti-check"></i> Save</button>
+          </div>
+        </div>
+        <div id="people-list" style="max-height:120px;overflow-y:auto"></div>
+      </div>
+
+      <!-- Tags -->
+      <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase">Position tags <span id="tag-count" style="font-weight:400"></span></div>
+        </div>
+        <div class="field-row two" style="margin-bottom:6px">
+          <div class="pf"><label>Name</label><input type="text" id="tag-name" placeholder="e.g. Ruben Mundo"></div>
+          <div class="pf"><label>Photo URL</label><input type="text" id="tag-photo" placeholder="https://…"></div>
+        </div>
+        <div class="field-row two" style="margin-bottom:6px">
+          <div class="pf"><label>IEM slot</label><select id="tag-iem"><option value="">— none —</option></select></div>
+          <div class="pf"><label>Production position</label>
+            <select id="tag-prod">
+              <option value="">— none —</option>
+              <option value="cg">CG</option><option value="cam">Camera</option>
+              <option value="foh">FOH</option><option value="mon">Monitors</option>
+              <option value="light">Lighting</option><option value="stage">Stage hand</option>
+              <option value="dir">Director</option><option value="stream">Streaming</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn success" style="margin-bottom:8px" onclick="saveTag()"><i class="ti ti-tag"></i> Save tag</button>
+        <div id="tag-list" style="max-height:100px;overflow-y:auto"></div>
+      </div>
+
+      <!-- Conflict rules -->
+      <div style="border-top:1px solid var(--border);padding-top:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase">Conflict rules</div>
+          <button class="btn" style="padding:3px 8px;font-size:11px" onclick="showAddRule()"><i class="ti ti-plus"></i> Add</button>
+        </div>
+        <div id="add-rule-form" style="display:none;background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px;margin-bottom:8px">
+          <div style="font-size:12px;color:var(--text-mid);margin-bottom:8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+            <strong style="color:var(--text)">If</strong>
+            <select id="rule-if-person" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit"><option value="">person…</option></select>
+            <span>scheduled, move</span>
+            <select id="rule-then-person" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit"><option value="">person…</option></select>
+            <span>to</span>
+            <select id="rule-then-type" onchange="updateRuleSlots()" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit">
+              <option value="iem">IEM</option><option value="mic">Mic</option><option value="prod">Production</option>
+            </select>
+            <select id="rule-then-slot" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit"></select>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn" onclick="document.getElementById('add-rule-form').style.display='none'">Cancel</button>
+            <button class="btn success" onclick="saveRule()"><i class="ti ti-check"></i> Save</button>
+          </div>
+        </div>
+        <div id="rules-list" style="font-size:12px;color:var(--text-dim)">No rules yet.</div>
       </div>
     </div>
+
   </div>
 </div>
 
+<!-- PEOPLE LIBRARY PANEL -->
 <!-- PEOPLE LIBRARY PANEL -->
 <div class="panel" id="people-panel">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -855,34 +972,35 @@ function togglePanel(id){
   const panels=['pco-panel','playlist-panel','tag-panel','people-panel','rules-panel','settings-panel'];
   panels.forEach(pid=>{
     const el=document.getElementById(pid);
-    if(pid===id){el.classList.toggle('open')}
-    else{el.classList.remove('open')}
+    if(!el) return;
+    if(pid===id) el.classList.toggle('open');
+    else el.classList.remove('open');
   });
   if(id==='playlist-panel'&&document.getElementById('playlist-panel').classList.contains('open'))loadPlaylistUI();
-  if(id==='tag-panel'&&document.getElementById('tag-panel').classList.contains('open'))loadTags();
-  if(id==='pco-panel'&&document.getElementById('pco-panel').classList.contains('open'))checkPCOAuth();
-  if(id==='people-panel'&&document.getElementById('people-panel').classList.contains('open'))loadPeoplePanel();
-  if(id==='rules-panel'&&document.getElementById('rules-panel').classList.contains('open'))loadRulesPanel();
-  if(id==='settings-panel'&&document.getElementById('settings-panel').classList.contains('open'))loadSettingsPanel();
+  if(id==='settings-panel'&&document.getElementById('settings-panel').classList.contains('open')){
+    checkPCOAuth(); loadTags(); loadPeoplePanel(); loadRulesPanel(); loadSettingsPanel();
+  }
 }
 
-// ── PCO ────────────────────────────────────────────────────────────────────────
 async function checkPCOAuth(){
   try{
     const s=await fetch('/auth/status').then(r=>r.json());
     const dot=document.getElementById('pco-auth-dot');
     const lbl=document.getElementById('pco-auth-label');
+    const pcoBtn=document.getElementById('pco-load-btn');
     if(s.connected){
-      dot.style.background='var(--green)';
-      lbl.innerHTML='Connected &nbsp;<button class="btn" style="padding:2px 8px;font-size:11px" onclick="disconnectPCO()">Disconnect</button>';
-      document.getElementById('pco-connect-msg').style.display='none';
-      document.getElementById('pco-controls').style.display='block';
+      if(dot) dot.style.background='var(--green)';
+      if(lbl) lbl.innerHTML='Connected &nbsp;<button class="btn" style="padding:2px 8px;font-size:11px" onclick="disconnectPCO()">Disconnect</button>';
+      const cm=document.getElementById('pco-connect-msg'); if(cm) cm.style.display='none';
+      const pc=document.getElementById('pco-controls');    if(pc) pc.style.display='block';
+      if(pcoBtn) pcoBtn.style.display='inline-flex';
       fetchPCOServices();
     } else {
-      dot.style.background='#555';
-      lbl.textContent='Not connected';
-      document.getElementById('pco-connect-msg').style.display='block';
-      document.getElementById('pco-controls').style.display='none';
+      if(dot) dot.style.background='#555';
+      if(lbl) lbl.textContent='Not connected';
+      const cm=document.getElementById('pco-connect-msg'); if(cm) cm.style.display='block';
+      const pc=document.getElementById('pco-controls');    if(pc) pc.style.display='none';
+      if(pcoBtn) pcoBtn.style.display='none';
     }
   }catch(e){}
 }
