@@ -56,6 +56,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 /* Assignment table */
 .assign-list{flex:1;overflow-y:auto;min-height:0}
 .assign-row{display:grid;align-items:center;padding:6px 12px;border-bottom:1px solid var(--border);gap:8px}
+.assign-row>*{min-width:0}
+.row-select{min-width:0;max-width:100%}
 .assign-row:hover{background:rgba(255,255,255,0.02)}
 .iem-row{grid-template-columns:24px 52px 36px 1fr 28px}
 .prod-row-grid{grid-template-columns:40px 1fr 28px}
@@ -118,6 +120,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <button class="btn" id="pco-load-btn" style="display:none" onclick="togglePanel('pco-load-panel')"><i class="ti ti-cloud-download"></i> Load from PCO</button>
     <button class="btn" onclick="togglePanel('playlist-panel')"><i class="ti ti-playlist"></i> Services</button>
     <button class="btn" onclick="window.open('/display','_blank')"><i class="ti ti-external-link"></i> Display</button>
+    <button class="btn" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Export PDF</button>
     <button class="btn" onclick="togglePanel('settings-panel')"><i class="ti ti-settings"></i> Settings</button>
   </div>
 </div>
@@ -482,6 +485,89 @@ async function preloadTagsPool(){
     peopleLibrary = ppl;
     rulesData = await fetch('/api/rules').then(r => r.json());
   } catch(e) {}
+}
+
+// ── Quick add person from any dropdown ─────────────────────────────────────────
+let _pendingAssign = null;
+function promptAddPerson(kind, ref) {
+  _pendingAssign = { kind, ref };
+  let ov = document.getElementById('quick-add-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'quick-add-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center';
+    ov.innerHTML = `
+      <div style="background:var(--s2);border:1px solid var(--border-mid);border-radius:12px;padding:18px;width:320px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">Add new person</div>
+        <input type="text" id="quick-add-name" placeholder="Full name"
+          style="width:100%;padding:8px 10px;border:1px solid var(--border-mid);border-radius:8px;background:var(--s3);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:10px"
+          onkeydown="if(event.key==='Enter')confirmQuickAdd();if(event.key==='Escape')cancelQuickAdd()">
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" onclick="cancelQuickAdd()">Cancel</button>
+          <button class="btn success" onclick="confirmQuickAdd()"><i class="ti ti-check"></i> Add &amp; assign</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+  }
+  ov.style.display = 'flex';
+  setTimeout(()=>document.getElementById('quick-add-name').focus(), 50);
+}
+function cancelQuickAdd() {
+  const ov = document.getElementById('quick-add-overlay');
+  if (ov) ov.style.display = 'none';
+  _pendingAssign = null;
+}
+async function confirmQuickAdd() {
+  const name = document.getElementById('quick-add-name').value.trim();
+  if (!name) return;
+  const pa = _pendingAssign;
+  cancelQuickAdd();
+  // Save to people library (persists across sessions)
+  await fetch('/api/people', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, photo:'', defaultIemSlot:null, defaultProdPosition:null, notes:'' }) });
+  peopleLibrary = await fetch('/api/people').then(r=>r.json());
+  savedTags = await fetch('/api/tags').then(r=>r.json());
+  // Make available in dropdowns even in PCO-roster mode
+  if (!stagingPool.find(p=>p.name===name)) stagingPool.push({ name, photo:'', classified:{type:'iem',sub:'iem'} });
+  // Assign to the slot that opened the dialog
+  if (pa) {
+    if (pa.kind === 'slot') assignSlot(pa.ref.type, pa.ref.id, name);
+    else assignProd(pa.ref.id, name);
+  }
+  toast('<i class="ti ti-user-plus"></i> ' + name + ' added to people library');
+}
+
+// ── Export live dashboard as PDF ────────────────────────────────────────────────
+function exportPDF() {
+  const esc = s => String(s||'').replace(/</g,'&lt;');
+  const iemRows = state.iems.filter(c=>c.name).map(c =>
+    `<tr><td class="n">${c.ch}</td><td>${esc(c.role)}</td><td class="b">${esc(c.name)}</td></tr>`).join('');
+  const prodRows = state.prod.filter(p=>p.name).map(p =>
+    `<tr><td>${esc(p.role)}</td><td class="b">${esc(p.name)}</td></tr>`).join('');
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>${esc(state.serviceName||'Show Dashboard')}</title>
+  <style>
+    body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#111;margin:32px}
+    h1{font-size:20px;margin:0 0 2px}
+    .sub{color:#666;font-size:12px;margin-bottom:22px}
+    .cols{display:flex;gap:32px;align-items:flex-start}
+    .col{flex:1}
+    h2{font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:#555;border-bottom:2px solid #222;padding-bottom:4px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    td{padding:5px 6px;border-bottom:1px solid #ddd;vertical-align:top}
+    td.n{width:26px;color:#888;text-align:right;font-variant-numeric:tabular-nums}
+    td.b{font-weight:700}
+    @media print{body{margin:12mm}}
+  </style></head><body>
+  <h1>${esc(state.serviceName||'Show Dashboard')}</h1>
+  <div class="sub">Exported ${new Date().toLocaleString()}</div>
+  <div class="cols">
+    <div class="col"><h2>IEM Packs</h2><table>${iemRows||'<tr><td>—</td></tr>'}</table></div>
+    <div class="col"><h2>Production Crew</h2><table>${prodRows||'<tr><td>—</td></tr>'}</table></div>
+  </div>
+  <script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script>
+  </body></html>`);
+  w.document.close();
 }
 
 // ── Position configuration ────────────────────────────────────────────────────
@@ -877,7 +963,8 @@ function poolOptions(assigned, slotType='iem'){
     return hasIem || (!hasIem && !hasProd);
   });
 
-  return filtered.map(p=>`<option value="${p.name}"${p.name===assigned?' selected':''}>${p.name}</option>`).join('');
+  return filtered.map(p=>`<option value="${p.name}"${p.name===assigned?' selected':''}>${p.name}</option>`).join('')
+    + '<option value="__add__">＋ Add new person…</option>';
 }
 
 function renderList(type){
@@ -1000,6 +1087,7 @@ function uf(type,id,field,val){
 }
 
 function assignSlot(type,id,name){
+  if(name==='__add__'){ promptAddPerson('slot',{type,id}); render(); return; }
   const arr=arrFor(type);
   const ch=arr.find(c=>c.id===id);
   if(!ch)return;
@@ -1020,6 +1108,7 @@ function assignSlot(type,id,name){
 }
 
 function assignProd(id,name){
+  if(name==='__add__'){ promptAddPerson('prod',{id}); render(); return; }
   const p=state.prod.find(c=>c.id===id);
   if(!p)return;
   if(!name){

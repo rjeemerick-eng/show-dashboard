@@ -34,6 +34,17 @@ const TAGS_FILE    = path.join(DATA_DIR, 'tags.json');
 const PEOPLE_FILE  = path.join(DATA_DIR, 'people.json');
 const RULES_FILE   = path.join(DATA_DIR, 'rules.json');
 
+const STATE_FILE = path.join(DATA_DIR, 'state.json');
+let _stateSaveTimer = null;
+function saveStateSoon() {
+  if (_stateSaveTimer) return;
+  _stateSaveTimer = setTimeout(() => {
+    _stateSaveTimer = null;
+    try { fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2)); }
+    catch(e) { console.error('[State] Save error:', e.message); }
+  }, 500);
+}
+
 // One-time migration: copy any data saved by older versions (inside the app
 // folder) into the home directory, without overwriting newer home-dir data.
 ['playlist.json','tags.json','people.json','rules.json'].forEach(f => {
@@ -184,6 +195,17 @@ let state = {
 
 // Restore active service state from playlist (must be after state declaration)
 loadPlaylist();
+// Restore last live board state (survives restarts). Takes precedence over
+// the active playlist snapshot because it includes unsaved live changes.
+try {
+  if (fs.existsSync(STATE_FILE)) {
+    const saved = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    if (saved && saved.iems && saved.prod) {
+      state = saved;
+      console.log('[State] Restored last live state from disk');
+    }
+  }
+} catch(e) { console.error('[State] Restore error:', e.message); }
 
 // ─── Connected clients tracking ───────────────────────────────────────────────
 const clients = new Set();
@@ -214,6 +236,7 @@ wss.on('connection', (ws, req) => {
     if (msg.type === 'update') {
       // Merge incoming state patch
       state = { ...state, ...msg.payload };
+      saveStateSoon();
       // Broadcast to all OTHER clients
       broadcast({ type: 'state', payload: state }, ws);
       console.log(`[~] State updated by ${ip}`);
@@ -256,6 +279,8 @@ app.get('/edit', (req, res) =>
 app.get('/api/state', (req, res) => res.json(state));
 app.post('/api/state', (req, res) => {
   state = { ...state, ...req.body };
+  saveStateSoon();
+  saveStateSoon();
   broadcast({ type: 'state', payload: state });
   res.json({ ok: true });
 });
@@ -622,7 +647,19 @@ app.post('/api/tags', (req, res) => {
   if (!name) return res.status(400).json({ error: 'name required' });
   tags[name] = { iemSlot, micSlot, prodPosition, photo: photo || tags[name]?.photo || '' };
   saveTags();
-  console.log(`[Tags] Saved tag for "${name}":`, tags[name]);
+  // Upsert into people library so tagged people are permanently saved
+  const existing = people.findIndex(p => p.name === name);
+  const person = {
+    id: existing >= 0 ? people[existing].id : 'person_' + Date.now(),
+    name,
+    photo: photo || (existing >= 0 ? people[existing].photo : '') || '',
+    defaultIemSlot: iemSlot ?? (existing >= 0 ? people[existing].defaultIemSlot : null),
+    defaultProdPosition: prodPosition || (existing >= 0 ? people[existing].defaultProdPosition : null),
+    notes: existing >= 0 ? people[existing].notes : ''
+  };
+  if (existing >= 0) people[existing] = person; else people.push(person);
+  savePeople();
+  console.log(`[Tags] Saved tag + person for "${name}"`);
   res.json({ ok: true });
 });
 
@@ -708,6 +745,7 @@ app.post('/api/playlist/:id/go-live', (req, res) => {
   state = JSON.parse(JSON.stringify(svc.state));
   activeServiceId = svc.id;
   savePlaylist();
+  saveStateSoon();
   broadcast({ type: 'state', payload: state });
   broadcast({ type: 'playlist', payload: { playlist: playlist.map(s=>({id:s.id,name:s.name,createdAt:s.createdAt,active:s.id===activeServiceId})), activeServiceId } });
   broadcast({ type: 'went_live', payload: { id: svc.id, name: svc.name } });
@@ -752,7 +790,8 @@ app.post('/api/import', (req, res) => {
     if (bundle.activeServiceId) activeServiceId = bundle.activeServiceId;
     if (bundle.state)    { state = bundle.state; }
     savePlaylist();
-    broadcast({ type: 'state', payload: state });
+    saveStateSoon();
+  broadcast({ type: 'state', payload: state });
     console.log('[Import] Data imported successfully');
     res.json({ ok: true, imported: { tags: Object.keys(tags).length, people: people.length, rules: rules.length, services: playlist.length } });
   } catch(e) {
