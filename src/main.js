@@ -99,6 +99,11 @@ function setupAutoUpdater() {
       global.triggerUpdateCheck = false;
       autoUpdater.checkForUpdates();
     }
+    if (global.triggerInstall) {
+      global.triggerInstall = false;
+      console.log('[Updater] Installing update now...');
+      autoUpdater.quitAndInstall();
+    }
   }, 2000);
 
   autoUpdater.on('checking-for-update', function() {

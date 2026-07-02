@@ -758,10 +758,8 @@ app.post('/api/check-update', (req, res) => {
 // Trigger OTA install from browser button
 app.post('/api/install-update', (req, res) => {
   res.json({ ok: true });
-  setTimeout(() => {
-    // Signal Electron main process via IPC if available
-    try { require('electron').autoUpdater.quitAndInstall(); } catch(e) {}
-  }, 500);
+  global.triggerInstall = true;
+  console.log('[Update] Install triggered from UI');
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
