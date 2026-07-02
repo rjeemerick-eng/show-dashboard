@@ -635,65 +635,11 @@ async function importData(input) {
   input.value = '';
 }
 
-async function checkForUpdates(btn) {
-  if (!btn && typeof event !== "undefined") btn = event?.currentTarget;
-  const result = document.getElementById("update-result");
-  if (btn) { btn.disabled = true; btn.innerHTML = "<i class='ti ti-loader'></i> Checking…"; }
-  if (result) result.textContent = "";
-  try {
-    await fetch("/api/check-update", { method: "POST" });
-  } catch(e) { /* silent - updater runs in background */ }
-  if (result) result.innerHTML = "<span style='color:var(--text-dim)'>Checking… update status will appear above if found.</span>";
-  setTimeout(function() {
-    if (result) result.textContent = "";
-    if (btn) { btn.disabled = false; btn.innerHTML = "<i class='ti ti-refresh'></i> Check for updates"; }
-  }, 3000);
-  if (btn) { btn.disabled = false; btn.innerHTML = "<i class='ti ti-refresh'></i> Check for updates"; }
-}
 
-async function exportData() {
-  try {
-    const res = await fetch('/api/export');
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'show-dashboard-backup-' + new Date().toISOString().slice(0,10) + '.json';
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('<i class="ti ti-check"></i> Backup exported');
-  } catch(e) { toast('Export failed', '#ef4444'); }
-}
 
-async function importData(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const result = document.getElementById('import-result');
-  result.textContent = 'Importing…';
-  try {
-    const text = await file.text();
-    const bundle = JSON.parse(text);
-    const r = await fetch('/api/import', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(bundle)
-    }).then(res => res.json());
-    if (r.ok) {
-      result.innerHTML = `<span style="color:#4ade80">✓ Imported: ${r.imported.tags} tags, ${r.imported.people} people, ${r.imported.rules} rules, ${r.imported.services} services</span>`;
-      savedTags = await fetch('/api/tags').then(res => res.json());
-      await preloadTagsPool();
-      loadPeoplePanel();
-      loadRulesPanel();
-      loadTags();
-      toast('<i class="ti ti-check"></i> Data imported successfully');
-    } else {
-      result.innerHTML = `<span style="color:#ef4444">Error: ${r.error}</span>`;
-    }
-  } catch(e) {
-    result.innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
-  }
-  input.value = '';
-}
+
+
+
 
 async function checkForUpdates(btn) {
   if (!btn) btn = document.querySelector('[onclick="checkForUpdates(this)"]') || event?.currentTarget;
@@ -709,69 +655,11 @@ async function checkForUpdates(btn) {
   if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh"></i> Check for updates'; }
 }
 
-async function exportData() {
-  try {
-    const res = await fetch('/api/export');
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'show-dashboard-backup-' + new Date().toISOString().slice(0,10) + '.json';
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('<i class="ti ti-check"></i> Backup exported');
-  } catch(e) { toast('Export failed', '#ef4444'); }
-}
 
-async function importData(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const result = document.getElementById('import-result');
-  result.textContent = 'Importing…';
-  try {
-    const text = await file.text();
-    const bundle = JSON.parse(text);
-    const r = await fetch('/api/import', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(bundle)
-    }).then(res => res.json());
-    if (r.ok) {
-      result.innerHTML = `<span style="color:#4ade80">✓ Imported: ${r.imported.tags} tags, ${r.imported.people} people, ${r.imported.rules} rules, ${r.imported.services} services</span>`;
-      savedTags = await fetch('/api/tags').then(res => res.json());
-      await preloadTagsPool();
-      loadPeoplePanel();
-      loadRulesPanel();
-      loadTags();
-      toast('<i class="ti ti-check"></i> Data imported successfully');
-    } else {
-      result.innerHTML = `<span style="color:#ef4444">Error: ${r.error}</span>`;
-    }
-  } catch(e) {
-    result.innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
-  }
-  input.value = '';
-}
 
-async function checkForUpdates() {
-  const btn = event.currentTarget;
-  const result = document.getElementById('update-result');
-  const status = document.getElementById('update-status');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="ti ti-loader"></i> Checking…';
-  result.textContent = '';
-  try {
-    const r = await fetch('/api/check-update', { method: 'POST' }).then(res => res.json());
-    if (r.checking) {
-      status.innerHTML = '<span style="color:#7eb8f5">Checking GitHub for updates…</span>';
-      result.innerHTML = '<span style="color:var(--text-dim);font-size:11px">You\'ll see a banner at the top of the screen if an update is found.</span>';
-    }
-  } catch(e) {
-    result.textContent = 'Error checking for updates';
-  }
-  btn.disabled = false;
-  btn.innerHTML = '<i class="ti ti-refresh"></i> Check for updates';
-}
+
+
+
 
 // ── People library ─────────────────────────────────────────────────────────────
 let peopleLibrary = [];
