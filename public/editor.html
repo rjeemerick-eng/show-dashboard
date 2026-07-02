@@ -747,15 +747,23 @@ async function loadConnectInfo() {
   if (!el) return;
   try {
     const info = await fetch('/api/connect-info').then(r=>r.json());
-    const mk = (url,label) => `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <code style="flex:1;padding:6px 10px;background:var(--s3);border:1px solid var(--border-mid);border-radius:6px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${url}</code>
-        <button class="btn" style="padding:4px 10px;font-size:11px" onclick="navigator.clipboard.writeText('${url}');toast('Copied')">Copy</button>
-        <span style="font-size:10px;color:var(--text-dim);width:64px">${label}</span>
+    const row = (base, label) => `
+      <div style="margin-bottom:10px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">${label}</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:10px;color:var(--text-dim);width:44px">Editor</span>
+          <code style="flex:1;padding:5px 9px;background:var(--s3);border:1px solid var(--border-mid);border-radius:6px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${base}/edit</code>
+          <button class="btn" style="padding:3px 9px;font-size:11px" onclick="navigator.clipboard.writeText('${base}/edit');toast('Copied')">Copy</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--text-dim);width:44px">Board</span>
+          <code style="flex:1;padding:5px 9px;background:var(--s3);border:1px solid var(--border-mid);border-radius:6px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${base}/display</code>
+          <button class="btn" style="padding:3px 9px;font-size:11px" onclick="navigator.clipboard.writeText('${base}/display');toast('Copied')">Copy</button>
+        </div>
       </div>`;
-    let out = mk(`http://${info.hostname}:${info.port}/edit`, 'stable');
-    (info.ips||[]).forEach(ip => out += mk(`http://${ip}:${info.port}/edit`, 'IP'));
-    out += `<div style="font-size:10px;color:var(--text-dim);margin-top:4px">Display view: replace /edit with /display. For a truly fixed numeric IP, reserve this Mac's address in your router (DHCP reservation).</div>`;
+    let out = row(`http://${info.hostname}:${info.port}`, 'Stable address (recommended)');
+    (info.ips||[]).forEach(ip => out += row(`http://${ip}:${info.port}`, 'Network IP'));
+    out += `<div style="font-size:10px;color:var(--text-dim)">Open on any device on the same network — changes sync live to every screen. For a fixed numeric IP, set a DHCP reservation for this Mac in your router.</div>`;
     el.innerHTML = out;
   } catch(e) { el.textContent = 'Unavailable'; }
 }
