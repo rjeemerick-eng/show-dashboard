@@ -1,6 +1,6 @@
 {
   "name": "show-dashboard",
-  "version": "1.0.42",
+  "version": "1.0.44",
   "description": "Live mic, IEM, and production crew dashboard",
   "main": "src/main.js",
   "author": {"name": "RJ Emerick", "email": "rjeemerick@gmail.com"},
@@ -19,7 +19,10 @@
     "copyright": "Copyright 2024",
     "mac": {
       "category": "public.app-category.productivity",
-      "target": [{"target": "dmg", "arch": ["universal"]}],
+      "target": [
+        {"target": "dmg", "arch": ["universal"]},
+        {"target": "zip", "arch": ["universal"]}
+      ],
       "notarize": {"teamId": "9BX9Z5V9U4"}
     },
     "dmg": {"title": "Show Dashboard", "window": {"width": 540, "height": 380}},
