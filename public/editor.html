@@ -150,9 +150,17 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <div class="panel-title" style="margin:0">Service playlist</div>
     <div style="display:flex;gap:8px;align-items:center">
       <span id="pl-live-badge" style="display:none;padding:3px 10px;border-radius:100px;font-size:10px;font-weight:700;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#4ade80"></span>
-      <button class="btn" onclick="newBlankService()"><i class="ti ti-plus"></i> New blank</button>
-      <button class="btn" onclick="saveAsService()"><i class="ti ti-device-floppy"></i> Save current</button>
+      <button class="btn" onclick="showSaveForm('blank')"><i class="ti ti-plus"></i> New blank</button>
+      <button class="btn" onclick="showSaveForm('current')"><i class="ti ti-device-floppy"></i> Save current</button>
     </div>
+  </div>
+  <!-- Inline save form -->
+  <div id="pl-save-form" style="display:none;margin-bottom:12px;gap:8px;align-items:center">
+    <input type="text" id="pl-save-name" placeholder="Service name e.g. Sunday 9am"
+      style="flex:1;padding:7px 10px;border:1px solid var(--border-mid);border-radius:var(--radius);background:var(--s3);color:var(--text);font-size:13px;font-family:inherit"
+      onkeydown="if(event.key==='Enter')doSaveService();if(event.key==='Escape')hideSaveForm()">
+    <button class="btn success" onclick="doSaveService()"><i class="ti ti-check"></i> Save</button>
+    <button class="btn" onclick="hideSaveForm()">Cancel</button>
   </div>
   <div id="pl-list"><div style="font-size:12px;color:var(--text-dim)">No services saved yet.</div></div>
   <div id="go-live-confirm" style="display:none;margin-top:12px;padding:12px;border:1px solid rgba(34,197,94,0.35);border-radius:10px;background:rgba(34,197,94,0.07)">
@@ -164,48 +172,6 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     </div>
   </div>
 </div>
-
-<!-- TAG PANEL -->
-<div class="panel" id="tag-panel">
-  <div class="panel-title">Position tags</div>
-  <div style="display:grid;grid-template-columns:340px 1fr;gap:16px">
-    <!-- Add form -->
-    <div>
-      <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:8px">Add / edit tag</div>
-      <div class="field-row two" style="margin-bottom:8px">
-        <div class="pf"><label>Name (must match PCO exactly)</label>
-          <input type="text" id="tag-name" placeholder="e.g. Ruben Mundo"></div>
-        <div class="pf"><label>Photo URL (optional)</label>
-          <input type="text" id="tag-photo" placeholder="https://…"></div>
-      </div>
-      <div class="field-row two" style="margin-bottom:8px">
-        <div class="pf"><label>IEM / Mic slot</label>
-          <select id="tag-iem"><option value="">— none —</option></select></div>
-        <div class="pf"><label>Production position</label>
-          <select id="tag-prod">
-            <option value="">— none —</option>
-            <option value="cg">CG</option>
-            <option value="cam">Camera</option>
-            <option value="foh">FOH</option>
-            <option value="mon">Monitors</option>
-            <option value="light">Lighting</option>
-            <option value="stage">Stage hand</option>
-            <option value="dir">Director / Producer</option>
-            <option value="stream">Streaming / Shader</option>
-          </select></div>
-      </div>
-      <button class="btn success" onclick="saveTag()"><i class="ti ti-tag"></i> Save tag</button>
-    </div>
-    <!-- Tag list -->
-    <div>
-      <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:8px">Saved tags (<span id="tag-count">0</span>)</div>
-      <div id="tag-list" style="max-height:160px;overflow-y:auto"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Shared datalist for all combo inputs -->
-<datalist id="pool-list"></datalist>
 
 <!-- SETTINGS PANEL -->
 <div class="panel" id="settings-panel">
@@ -385,74 +351,6 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       </div>
     </div>
 
-  </div>
-</div>
-
-<!-- PEOPLE LIBRARY PANEL -->
-<!-- PEOPLE LIBRARY PANEL -->
-<!-- PEOPLE LIBRARY PANEL -->
-<div class="panel" id="people-panel">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-    <div class="panel-title" style="margin:0">People library <span id="people-count" style="font-size:12px;font-weight:400;color:var(--text-dim)"></span></div>
-    <button class="btn success" onclick="showAddPerson()"><i class="ti ti-plus"></i> Add person</button>
-  </div>
-  <div id="add-person-form" style="display:none;background:var(--s3);border:1px solid var(--border-mid);border-radius:10px;padding:14px;margin-bottom:14px">
-    <div style="font-size:12px;font-weight:600;margin-bottom:10px">Add / edit person</div>
-    <div class="field-row two" style="margin-bottom:8px">
-      <div class="pf"><label>Full name (match PCO exactly)</label><input type="text" id="pp-name" placeholder="e.g. Ruben Mundo"></div>
-      <div class="pf"><label>Photo URL</label><input type="text" id="pp-photo" placeholder="https://…"></div>
-    </div>
-    <div class="field-row two" style="margin-bottom:8px">
-      <div class="pf"><label>Default IEM slot</label><select id="pp-iem"><option value="">— none —</option></select></div>
-      <div class="pf"><label>Default production position</label>
-        <select id="pp-prod">
-          <option value="">— none —</option>
-          <option value="cg">CG</option><option value="cam">Camera</option>
-          <option value="foh">FOH</option><option value="mon">Monitors</option>
-          <option value="light">Lighting</option><option value="stage">Stage hand</option>
-          <option value="dir">Director / Producer</option><option value="stream">Streaming / Shader</option>
-        </select>
-      </div>
-    </div>
-    <div class="pf" style="margin-bottom:10px"><label>Notes</label><input type="text" id="pp-notes" placeholder="Instrument, role, notes"></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn" onclick="document.getElementById('add-person-form').style.display='none'">Cancel</button>
-      <button class="btn success" onclick="savePerson()"><i class="ti ti-check"></i> Save</button>
-    </div>
-  </div>
-  <div id="people-list" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto"></div>
-</div>
-
-<!-- CONFLICT RULES PANEL -->
-<div class="panel" id="rules-panel">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-    <div>
-      <div class="panel-title" style="margin:0">Conflict rules</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Auto-reassign when specific people are scheduled together</div>
-    </div>
-    <button class="btn success" onclick="showAddRule()"><i class="ti ti-plus"></i> Add rule</button>
-  </div>
-  <div id="add-rule-form" style="display:none;background:var(--s3);border:1px solid var(--border-mid);border-radius:10px;padding:14px;margin-bottom:14px">
-    <div style="font-size:12px;font-weight:600;margin-bottom:10px">New conflict rule</div>
-    <div style="font-size:12px;color:var(--text-mid);margin-bottom:10px;line-height:2;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
-      <strong style="color:var(--text)">If</strong>
-      <select id="rule-if-person" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit"><option value="">select person…</option></select>
-      <span>is scheduled, move</span>
-      <select id="rule-then-person" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit"><option value="">select person…</option></select>
-      <span>to</span>
-      <select id="rule-then-type" onchange="updateRuleSlots()" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit">
-        <option value="iem">IEM</option><option value="mic">Mic</option><option value="prod">Production</option>
-      </select>
-      <span>slot</span>
-      <select id="rule-then-slot" style="padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit"></select>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:10px">
-      <button class="btn" onclick="document.getElementById('add-rule-form').style.display='none'">Cancel</button>
-      <button class="btn success" onclick="saveRule()"><i class="ti ti-check"></i> Save rule</button>
-    </div>
-  </div>
-  <div id="rules-list" style="display:flex;flex-direction:column;gap:6px">
-    <div style="font-size:12px;color:var(--text-dim)">No rules yet. Add one above.</div>
   </div>
 </div>
 
@@ -1542,50 +1440,61 @@ function renderPlaylistUI(){
   }).join('');
 }
 
-async function newBlankService(){
-  const name = prompt('Service name:', 'Sunday 9am');
+let _saveMode = 'current';
+function showSaveForm(mode) {
+  _saveMode = mode;
+  const form = document.getElementById('pl-save-form');
+  const input = document.getElementById('pl-save-name');
+  form.style.display = 'flex';
+  input.value = '';
+  input.placeholder = mode === 'blank' ? 'New blank service name…' : 'Service name…';
+  input.focus();
+}
+function hideSaveForm() {
+  document.getElementById('pl-save-form').style.display = 'none';
+}
+async function doSaveService() {
+  const name = document.getElementById('pl-save-name').value.trim();
   if (!name) return;
+  hideSaveForm();
+  if (_saveMode === 'blank') {
+    await newBlankService(name);
+  } else {
+    await saveAsService(name);
+  }
+}
 
-  // Deep clone current state structure but wipe all names, photos, assignments
+async function newBlankService(name){
   const blank = JSON.parse(JSON.stringify(state));
   blank.serviceName = name;
   blank.mics.forEach(c => { c.name=''; c.photo=''; c.status='na'; });
   blank.iems.forEach(c => { c.name=''; c.photo=''; c.status='na'; c.mix=''; });
   blank.prod.forEach(c => { c.name=''; c.photo=''; });
-
-  // Save as a playlist entry
   const res = await fetch('/api/playlist', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name })
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name })
   });
   const { id } = await res.json();
-
-  // Overwrite that entry with the blank state
   await fetch(`/api/playlist/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ saveCurrentState: false, blankState: blank })
   });
-
-  // Go live with it immediately — clears the display and editor
   await fetch(`/api/playlist/${id}/go-live`, { method: 'POST' });
-
   stagingPool = [];
-  loadPlaylistUI();
-  toast(`<i class="ti ti-plus"></i> New blank service: ${name}`);
+  await loadPlaylistUI();
+  toast('<i class="ti ti-plus"></i> New blank: ' + name);
 }
 
-async function saveAsService(){
-  const name=prompt('Service name:','Sunday 9am');if(!name)return;
-  const r=await fetch('/api/playlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
-  const d=await r.json();
-  if(d.id){
+async function saveAsService(name){
+  const r = await fetch('/api/playlist', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name })
+  });
+  const d = await r.json();
+  if (d.id) {
     await loadPlaylistUI();
     renderPlaylistUI();
-    toast('<i class="ti ti-check"></i> Saved: '+name);
+    toast('<i class="ti ti-check"></i> Saved: ' + name);
   } else {
-    toast('Error saving service','#ef4444');
+    toast('Error saving service', '#ef4444');
   }
 }
 async function renameService(id,name){if(!name.trim())return;await fetch(`/api/playlist/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim()})})}
