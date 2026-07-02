@@ -22,10 +22,30 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 const PORT = process.env.PORT || 3000;
-const PLAYLIST_FILE = path.join(__dirname, 'playlist.json');
-const TAGS_FILE    = path.join(__dirname, 'tags.json');
-const PEOPLE_FILE  = path.join(__dirname, 'people.json');
-const RULES_FILE   = path.join(__dirname, 'rules.json');
+// ─── Persistent data directory ────────────────────────────────────────────────
+// Data lives in the user's home folder so it SURVIVES app updates.
+// (Files inside the app bundle are wiped every time the app is replaced.)
+const os = require('os');
+const DATA_DIR = path.join(os.homedir(), '.show-dashboard');
+try { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); } catch(e) {}
+
+const PLAYLIST_FILE = path.join(DATA_DIR, 'playlist.json');
+const TAGS_FILE    = path.join(DATA_DIR, 'tags.json');
+const PEOPLE_FILE  = path.join(DATA_DIR, 'people.json');
+const RULES_FILE   = path.join(DATA_DIR, 'rules.json');
+
+// One-time migration: copy any data saved by older versions (inside the app
+// folder) into the home directory, without overwriting newer home-dir data.
+['playlist.json','tags.json','people.json','rules.json'].forEach(f => {
+  try {
+    const oldPath = path.join(__dirname, f);
+    const newPath = path.join(DATA_DIR, f);
+    if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
+      fs.copyFileSync(oldPath, newPath);
+      console.log('[Data] Migrated', f, 'to', DATA_DIR);
+    }
+  } catch(e) {}
+});
 
 // ─── Playlist (persisted to disk) ────────────────────────────────────────────
 let playlist = []; // [{id, name, createdAt, state}]
