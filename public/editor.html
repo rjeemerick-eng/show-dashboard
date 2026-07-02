@@ -537,35 +537,100 @@ async function confirmQuickAdd() {
   toast('<i class="ti ti-user-plus"></i> ' + name + ' added to people library');
 }
 
-// ── Export live dashboard as PDF ────────────────────────────────────────────────
+// ── Export live dashboard as PDF (replica of the display board) ────────────────
 function exportPDF() {
   const esc = s => String(s||'').replace(/</g,'&lt;');
-  const iemRows = state.iems.filter(c=>c.name).map(c =>
-    `<tr><td class="n">${c.ch}</td><td>${esc(c.role)}</td><td class="b">${esc(c.name)}</td></tr>`).join('');
-  const prodRows = state.prod.filter(p=>p.name).map(p =>
-    `<tr><td>${esc(p.role)}</td><td class="b">${esc(p.name)}</td></tr>`).join('');
+  const PDF_PROD_POS = {
+    cg:{label:'CG',color:'#7F77DD'}, cam:{label:'Camera',color:'#1D9E75'},
+    foh:{label:'FOH',color:'#D85A30'}, mon:{label:'Monitors',color:'#378ADD'},
+    light:{label:'Lighting',color:'#BA7517'}, stage:{label:'Stage',color:'#777777'},
+    dir:{label:'Director',color:'#D4537E'}, stream:{label:'Streaming',color:'#639922'}
+  };
+  const av = (name, photo, size) => {
+    if (!name) return `<div style="width:${size}px;height:${size}px"></div>`;
+    if (photo) return `<div class="avc" style="width:${size}px;height:${size}px"><img src="${esc(photo)}"></div>`;
+    return `<div class="avc" style="width:${size}px;height:${size}px;background:${colorFor(name)};font-size:${Math.round(size*0.38)}px">${initials(name)}</div>`;
+  };
+
+  // IEM rows — mirror the board: all rows, unassigned dimmed
+  const iemRows = state.iems.map(c => `
+    <div class="prow irow${c.name?'':' na'}">
+      <div class="pnum">${c.ch}</div>
+      ${av(c.name, c.photo, 30)}
+      <div class="pname">${c.name?`<span class="sdot"></span>${esc(c.name)}`:''}</div>
+      <div class="prole">${esc(c.role)}</div>
+    </div>`).join('');
+
+  // Production — grouped by position, assigned only (like the board)
+  const groups = {};
+  state.prod.forEach(p => { if (p.name) (groups[p.position]=groups[p.position]||[]).push(p); });
+  const prodHTML = Object.entries(groups).map(([pos, members]) => {
+    const g = PDF_PROD_POS[pos] || {label:pos, color:'#777'};
+    return `
+    <div class="pgroup">
+      <div class="pghead"><span class="pglabel" style="color:${g.color}">${esc(g.label)}</span><span class="pgline" style="background:${g.color}33"></span></div>
+      ${members.map(p => `
+      <div class="pmrow">
+        ${av(p.name, p.photo, 26)}
+        <div class="pmtext"><span class="pmname">${esc(p.name)}</span><span class="pmrole" style="color:${g.color}">${esc(p.role)}</span></div>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
+
+  const activeIem = state.iems.filter(c=>c.name).length;
+  const activeProd = state.prod.filter(p=>p.name).length;
+
   const w = window.open('', '_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>${esc(state.serviceName||'Show Dashboard')}</title>
   <style>
-    body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#111;margin:32px}
-    h1{font-size:20px;margin:0 0 2px}
-    .sub{color:#666;font-size:12px;margin-bottom:22px}
-    .cols{display:flex;gap:32px;align-items:flex-start}
-    .col{flex:1}
-    h2{font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:#555;border-bottom:2px solid #222;padding-bottom:4px}
-    table{width:100%;border-collapse:collapse;font-size:13px}
-    td{padding:5px 6px;border-bottom:1px solid #ddd;vertical-align:top}
-    td.n{width:26px;color:#888;text-align:right;font-variant-numeric:tabular-nums}
-    td.b{font-weight:700}
-    @media print{body{margin:12mm}}
+    :root{--bg:#0a0a0a;--surface:#111;--border:rgba(255,255,255,0.07);--border-mid:rgba(255,255,255,0.13);
+      --text:#fff;--text-mid:rgba(255,255,255,0.45);--text-dim:rgba(255,255,255,0.22);--green:#22c55e}
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    @page{size:landscape;margin:0}
+    body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    .header{display:flex;align-items:center;justify-content:space-between;padding:14px 40px;background:var(--surface);border-bottom:1px solid var(--border-mid)}
+    .svc-label{font-size:9px;font-weight:900;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-dim)}
+    .svc-name{font-size:18px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;margin-top:2px}
+    .stamp{font-size:10px;color:var(--text-dim)}
+    .cols{display:grid;grid-template-columns:1fr 1px 1fr;min-height:calc(100vh - 63px)}
+    .divider{background:var(--border-mid)}
+    .colhead{display:flex;align-items:center;justify-content:space-between;padding:10px 28px;border-bottom:1px solid var(--border-mid)}
+    .coltitle{font-size:9px;font-weight:900;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-dim)}
+    .colcount{font-size:9px;font-weight:700;letter-spacing:0.1em;color:var(--text-dim)}
+    .prow{display:grid;align-items:center;padding:7px 28px;border-bottom:1px solid var(--border)}
+    .irow{grid-template-columns:36px 44px 1fr 1fr;gap:0 10px}
+    .prow.na{opacity:0.2}
+    .pnum{font-size:11px;font-weight:900;color:var(--text-dim);font-variant-numeric:tabular-nums;letter-spacing:0.05em}
+    .avc{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;text-transform:uppercase;overflow:hidden;flex-shrink:0}
+    .avc img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+    .pname{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:900;letter-spacing:0.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sdot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
+    .prole{font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+    .pgroup{padding-top:8px}
+    .pghead{display:flex;align-items:center;gap:10px;padding:6px 28px}
+    .pglabel{font-size:9px;font-weight:900;letter-spacing:0.18em;text-transform:uppercase;white-space:nowrap}
+    .pgline{flex:1;height:1px}
+    .pmrow{display:flex;align-items:center;gap:12px;padding:5px 28px 5px 40px;border-bottom:1px solid var(--border)}
+    .pmtext{display:flex;align-items:baseline;gap:10px;min-width:0}
+    .pmname{font-size:13px;font-weight:900;letter-spacing:0.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .pmrole{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;white-space:nowrap}
   </style></head><body>
-  <h1>${esc(state.serviceName||'Show Dashboard')}</h1>
-  <div class="sub">Exported ${new Date().toLocaleString()}</div>
-  <div class="cols">
-    <div class="col"><h2>IEM Packs</h2><table>${iemRows||'<tr><td>—</td></tr>'}</table></div>
-    <div class="col"><h2>Production Crew</h2><table>${prodRows||'<tr><td>—</td></tr>'}</table></div>
+  <div class="header">
+    <div><div class="svc-label">Service</div><div class="svc-name">${esc(state.serviceName||'Show Dashboard')}</div></div>
+    <div class="stamp">Exported ${new Date().toLocaleString()}</div>
   </div>
-  <script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script>
+  <div class="cols">
+    <div>
+      <div class="colhead"><span class="coltitle">🎧&nbsp; IEM Packs</span><span class="colcount">${activeIem} ACTIVE</span></div>
+      ${iemRows}
+    </div>
+    <div class="divider"></div>
+    <div>
+      <div class="colhead"><span class="coltitle">🔧&nbsp; Production Crew</span><span class="colcount">${activeProd} ACTIVE</span></div>
+      ${prodHTML || '<div style="padding:20px 28px;color:var(--text-dim);font-size:12px">No production crew assigned</div>'}
+    </div>
+  </div>
+  <script>window.onload=function(){setTimeout(function(){window.print()},400)}<\/script>
   </body></html>`);
   w.document.close();
 }
