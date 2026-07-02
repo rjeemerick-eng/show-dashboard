@@ -122,48 +122,6 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   </div>
 </div>
 
-<!-- PCO PANEL -->
-<div class="panel" id="pco-panel">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-    <div class="panel-title" style="margin:0">Planning Center</div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <div id="pco-auth-dot" style="width:7px;height:7px;border-radius:50%;background:#444"></div>
-      <span id="pco-auth-label" style="font-size:11px;color:var(--text-mid)">Not connected</span>
-    </div>
-  </div>
-  <div id="pco-connect-msg" style="display:none">
-    <div style="font-size:12px;color:var(--text-mid);margin-bottom:10px">Enter your Planning Center credentials to connect.</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:flex-end;margin-bottom:8px">
-      <div class="pf"><label>Application ID</label>
-        <input type="text" id="pco-cred-appid" placeholder="Your PCO App ID"></div>
-      <div class="pf"><label>Personal Access Token</label>
-        <input type="password" id="pco-cred-token" placeholder="pco_pat_..."></div>
-      <button class="btn success" onclick="savePCOCredentials()"><i class="ti ti-plug"></i> Connect</button>
-    </div>
-    <div style="font-size:11px;color:var(--text-dim)">
-      Get your token at <a href="#" onclick="openExternal('https://api.planningcenteronline.com/oauth/applications')" style="color:var(--blue)">api.planningcenteronline.com/oauth/applications</a> → Personal Access Tokens
-    </div>
-  </div>
-  <div id="pco-controls" style="display:none">
-    <div class="field-row four" style="margin-bottom:10px">
-      <div class="pf"><label>Service type</label>
-        <select id="pco-svc-type" onchange="fetchUpcomingForType()"><option value="">Select…</option></select>
-      </div>
-      <div class="pf"><label>Plan / date</label>
-        <select id="pco-plan-sel"><option value="">Select…</option></select>
-      </div>
-      <div class="pf" style="display:flex;align-items:flex-end;gap:6px">
-        <button class="btn" style="justify-content:center" onclick="loadRoster(false)"><i class="ti ti-users"></i> Load from PCO</button>
-        <button class="btn" id="refresh-btn" style="display:none;justify-content:center" onclick="loadRoster(true)" title="Add new names only"><i class="ti ti-refresh"></i></button>
-      </div>
-      <div class="pf" style="display:flex;align-items:flex-end">
-        <div id="pco-status" style="font-size:11px;color:var(--text-mid);padding:4px 0;line-height:1.5"></div>
-      </div>
-    </div>
-    <button class="btn" onclick="loadFromTags()" style="margin-top:4px"><i class="ti ti-tag"></i> Load from saved tags (no PCO needed)</button>
-  </div>
-</div>
-
 <!-- PLAYLIST PANEL -->
 <div class="panel" id="playlist-panel">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -244,11 +202,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
           <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Enter your Planning Center App ID and Personal Access Token to connect.</div>
           <div class="field-row" style="margin-bottom:6px">
             <div class="pf"><label>Application ID</label>
-              <input type="text" id="pco-cred-appid" placeholder="Your PCO App ID"></div>
+              <input type="text" id="pco-cred-appid-s" placeholder="Your PCO App ID"></div>
           </div>
           <div class="field-row" style="margin-bottom:8px">
             <div class="pf"><label>Personal Access Token</label>
-              <input type="password" id="pco-cred-token" placeholder="pco_pat_..."></div>
+              <input type="password" id="pco-cred-token-s" placeholder="pco_pat_..."></div>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <button class="btn success" onclick="savePCOCredentials()"><i class="ti ti-plug"></i> Connect</button>
@@ -1006,8 +964,8 @@ async function checkPCOAuth(){
 }
 
 async function savePCOCredentials(){
-  const appId = document.getElementById('pco-cred-appid').value.trim();
-  const token = document.getElementById('pco-cred-token').value.trim();
+  const appId = (document.getElementById('pco-cred-appid-s')?.value || '').trim();
+  const token = (document.getElementById('pco-cred-token-s')?.value || '').trim();
   if(!appId||!token){toast('Enter both App ID and token','#f59e0b');return;}
   const r = await fetch('/auth/credentials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({appId,token})});
   const d = await r.json();
