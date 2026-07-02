@@ -703,6 +703,43 @@ app.get('/api/playlist/:id/preview', (req, res) => {
 });
 
 // App version info
+// Export all data as a single JSON bundle
+app.get('/api/export', (req, res) => {
+  const bundle = {
+    exportedAt: new Date().toISOString(),
+    version: '1.0',
+    tags,
+    people,
+    rules,
+    playlist,
+    activeServiceId,
+    state
+  };
+  res.setHeader('Content-Disposition', 'attachment; filename="show-dashboard-backup.json"');
+  res.setHeader('Content-Type', 'application/json');
+  res.json(bundle);
+});
+
+// Import data bundle
+app.post('/api/import', (req, res) => {
+  const bundle = req.body;
+  if (!bundle || !bundle.version) return res.status(400).json({ error: 'Invalid bundle' });
+  try {
+    if (bundle.tags)     { Object.assign(tags, bundle.tags); saveTags(); }
+    if (bundle.people)   { people = bundle.people; savePeople(); }
+    if (bundle.rules)    { rules  = bundle.rules;  saveRules(); }
+    if (bundle.playlist) { playlist = bundle.playlist; }
+    if (bundle.activeServiceId) activeServiceId = bundle.activeServiceId;
+    if (bundle.state)    { state = bundle.state; }
+    savePlaylist();
+    broadcast({ type: 'state', payload: state });
+    console.log('[Import] Data imported successfully');
+    res.json({ ok: true, imported: { tags: Object.keys(tags).length, people: people.length, rules: rules.length, services: playlist.length } });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/version', (req, res) => {
   try {
     const pkg = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'package.json'), 'utf8'));

@@ -241,6 +241,18 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         <button class="btn" onclick="checkForUpdates()"><i class="ti ti-refresh"></i> Check for updates</button>
         <div id="update-result" style="margin-top:6px;font-size:11px;color:var(--text-dim)"></div>
       </div>
+
+      <!-- Export / Import -->
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Backup &amp; transfer</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Export all your tags, people, rules, and services to transfer to another installation.</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn" onclick="exportData()"><i class="ti ti-download"></i> Export backup</button>
+          <label class="btn" style="cursor:pointer"><i class="ti ti-upload"></i> Import backup<input type="file" accept=".json" style="display:none" onchange="importData(this)"></label>
+        </div>
+        <div id="import-result" style="margin-top:8px;font-size:11px;color:var(--text-dim)"></div>
+      </div>
+      </div>
     </div>
 
     <!-- RIGHT: People, Tags, Rules -->
@@ -528,11 +540,54 @@ async function preloadTagsPool(){
 }
 
 async function loadSettingsPanel() {
-  // Load version from server
   try {
     const info = await fetch('/api/version').then(r => r.json());
     document.getElementById('version-label').textContent = `Version ${info.version}`;
   } catch(e) {}
+}
+
+async function exportData() {
+  try {
+    const res = await fetch('/api/export');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'show-dashboard-backup-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('<i class="ti ti-check"></i> Backup exported');
+  } catch(e) { toast('Export failed', '#ef4444'); }
+}
+
+async function importData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const result = document.getElementById('import-result');
+  result.textContent = 'Importing…';
+  try {
+    const text = await file.text();
+    const bundle = JSON.parse(text);
+    const r = await fetch('/api/import', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(bundle)
+    }).then(res => res.json());
+    if (r.ok) {
+      result.innerHTML = `<span style="color:#4ade80">✓ Imported: ${r.imported.tags} tags, ${r.imported.people} people, ${r.imported.rules} rules, ${r.imported.services} services</span>`;
+      savedTags = await fetch('/api/tags').then(res => res.json());
+      await preloadTagsPool();
+      loadPeoplePanel();
+      loadRulesPanel();
+      loadTags();
+      toast('<i class="ti ti-check"></i> Data imported successfully');
+    } else {
+      result.innerHTML = `<span style="color:#ef4444">Error: ${r.error}</span>`;
+    }
+  } catch(e) {
+    result.innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
+  }
+  input.value = '';
 }
 
 async function checkForUpdates() {
@@ -737,29 +792,38 @@ function avatar(name,photo,size=32){
   return`<div class="row-avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.34)}px;background:${col}">${initials(name)}</div>`;
 }
 
-function poolOptions(assigned){
+function poolOptions(assigned, slotType='iem'){
   const allAssigned=new Set();
   state.iems.forEach(c=>{if(c.name)allAssigned.add(c.name)});
   state.mics.forEach(c=>{if(c.name)allAssigned.add(c.name)});
   state.prod.forEach(c=>{if(c.name)allAssigned.add(c.name)});
 
-  // Build combined list: pool + any names already in state (from tags/previous sessions)
   const seen=new Set();
   const combined=[];
-  stagingPool.forEach(p=>{if(!seen.has(p.name)){seen.add(p.name);combined.push(p);}});
-  // Add names from state that aren't in pool (e.g. loaded from saved service)
+  stagingPool.forEach(p=>{if(p.name&&!seen.has(p.name)){seen.add(p.name);combined.push(p);}});
+  Object.entries(savedTags).forEach(([name,t])=>{
+    if(!seen.has(name)){seen.add(name);combined.push({name,photo:t.photo||'',iemSlot:t.iemSlot,prodPosition:t.prodPosition});}
+  });
+  (peopleLibrary||[]).forEach(p=>{
+    if(!seen.has(p.name)){seen.add(p.name);combined.push({name:p.name,photo:p.photo||'',iemSlot:p.defaultIemSlot,prodPosition:p.defaultProdPosition});}
+  });
+  // Add names from current state not in pool
   allAssigned.forEach(name=>{
-    if(!seen.has(name)){
-      seen.add(name);
-      const tag=savedTags[name];
-      combined.push({name,photo:tag?.photo||'',position:''});
-    }
+    if(!seen.has(name)){seen.add(name);const tag=savedTags[name]||{};combined.push({name,photo:tag.photo||'',iemSlot:tag.iemSlot,prodPosition:tag.prodPosition});}
   });
 
-  return combined
-    .filter(p=>!allAssigned.has(p.name)||p.name===assigned)
-    .map(p=>`<option value="${p.name}"${p.name===assigned?' selected':''}>${p.name}</option>`)
-    .join('');
+  const filtered = combined.filter(p => {
+    if(p.name === assigned) return true;
+    if(allAssigned.has(p.name)) return false;
+    const tag=savedTags[p.name]||{};
+    const person=(peopleLibrary||[]).find(x=>x.name===p.name);
+    const hasProd = tag.prodPosition || person?.defaultProdPosition;
+    const hasIem  = (tag.iemSlot!=null && tag.iemSlot!==undefined) || (person?.defaultIemSlot!=null && person?.defaultIemSlot!==undefined);
+    if(slotType==='prod') return hasProd || (!hasIem && !hasProd);
+    return hasIem || (!hasIem && !hasProd);
+  });
+
+  return filtered.map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
 }
 
 function renderList(type){
@@ -786,12 +850,13 @@ function renderList(type){
           ${avatar(p.name,p.photo,32)}
           <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
             <div style="font-size:11px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.role}</div>
-            <input list="pool-list" class="row-select${p.name?' filled':''}"
-              value="${p.name||''}" placeholder="— type or select —"
+            <select class="row-select${p.name?' filled':''}"
               onclick="event.stopPropagation()"
-              onchange="assignProd('${p.id}',this.value.trim())"
-              onblur="assignProd('${p.id}',this.value.trim())"
-              style="font-size:12px;padding:3px 6px;width:100%">
+              onchange="assignProd('${p.id}',this.value)"
+              style="font-size:12px;padding:3px 6px;width:100%;max-height:200px">
+              <option value="">— unassigned —</option>
+              ${poolOptions(p.name,'prod')}
+            </select>
           </div>
           <div style="display:flex;align-items:center;gap:4px">
             <div class="s-dot ${dotCls}"></div>
@@ -811,12 +876,12 @@ function renderList(type){
         <div class="row-role">${ch.role}</div>
         ${avatar(ch.name,ch.photo,30)}
         <div style="display:flex;gap:4px;align-items:center" onclick="event.stopPropagation()">
-          <input list="pool-list" class="row-select${ch.name?' filled':''}"
-            value="${ch.name||''}" placeholder="— type or select —"
-            onchange="assignSlot('${type}','${ch.id}',this.value.trim())"
-            onblur="assignSlot('${type}','${ch.id}',this.value.trim())"
-            style="flex:1">
-          ${ch.name?`<button onclick="event.stopPropagation();assignSlot('${type}','${ch.id}','')" style="padding:4px 7px;border-radius:5px;border:1px solid var(--border-mid);background:none;color:var(--text-dim);cursor:pointer;font-size:12px;flex-shrink:0">×</button>`:''}
+          <select class="row-select${ch.name?' filled':''}"
+            onchange="assignSlot('${type}','${ch.id}',this.value)"
+            style="flex:1;max-height:200px">
+            <option value="">— unassigned —</option>
+            ${poolOptions(ch.name,'iem')}
+          </select>
         </div>
         <div style="display:flex;align-items:center;gap:3px">
           ${ch.name?`<button class="tag-btn ${tagIcon}" onclick="event.stopPropagation();quickTag('${type}','${ch.id}')" title="Save as tag"><i class="ti ti-tag"></i></button>`:'<span style="width:24px"></span>'}
