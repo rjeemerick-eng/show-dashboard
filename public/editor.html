@@ -416,6 +416,7 @@ const PCO_POS_MAP=[
 // ── State ──────────────────────────────────────────────────────────────────────
 let state=null, ws=null;
 let stagingPool=[], savedTags={};
+let poolSource='tags'; // 'tags' = library preload, 'pco' = loaded PCO roster
 let expandedRow=null; // {type,id}
 let idCtr=200;
 let playlistData=[], activeServiceId=null;
@@ -455,6 +456,7 @@ function connect(){
       toast(`<i class="ti ti-broadcast"></i> Now live: ${msg.payload.name}`);
       // Clear PCO pool when switching services — dropdowns will repopulate from tags only
       stagingPool = [];
+      poolSource='tags';
       preloadTagsPool();
     }
   };
@@ -472,7 +474,7 @@ async function preloadTagsPool(){
         pool.push({ name: p.name, photo: p.photo||'', position: '', teamName: '', iemSlot: p.defaultIemSlot, prodPosition: p.defaultProdPosition });
       }
     });
-    if (pool.length) {
+    if (pool.length && poolSource!=='pco') {
       stagingPool = pool.map(p => ({ ...p, classified: { type: p.prodPosition ? 'prod' : 'iem', sub: p.prodPosition || 'iem' } }));
       render();
     }
@@ -962,12 +964,15 @@ function poolOptions(assigned, slotType='iem'){
   const seen=new Set();
   const combined=[];
   stagingPool.forEach(p=>{if(p.name&&!seen.has(p.name)){seen.add(p.name);combined.push(p);}});
-  Object.entries(savedTags).forEach(([name,t])=>{
-    if(!seen.has(name)){seen.add(name);combined.push({name,photo:t.photo||'',iemSlot:t.iemSlot,prodPosition:t.prodPosition});}
-  });
-  (peopleLibrary||[]).forEach(p=>{
-    if(!seen.has(p.name)){seen.add(p.name);combined.push({name:p.name,photo:p.photo||'',iemSlot:p.defaultIemSlot,prodPosition:p.defaultProdPosition});}
-  });
+  // After a PCO roster load, dropdowns show ONLY this week's people
+  if(poolSource!=='pco'){
+    Object.entries(savedTags).forEach(([name,t])=>{
+      if(!seen.has(name)){seen.add(name);combined.push({name,photo:t.photo||'',iemSlot:t.iemSlot,prodPosition:t.prodPosition});}
+    });
+    (peopleLibrary||[]).forEach(p=>{
+      if(!seen.has(p.name)){seen.add(p.name);combined.push({name:p.name,photo:p.photo||'',iemSlot:p.defaultIemSlot,prodPosition:p.defaultProdPosition});}
+    });
+  }
   // Add names from current state not in pool
   allAssigned.forEach(name=>{
     if(!seen.has(name)){seen.add(name);const tag=savedTags[name]||{};combined.push({name,photo:tag.photo||'',iemSlot:tag.iemSlot,prodPosition:tag.prodPosition});}
@@ -1294,7 +1299,12 @@ async function loadRoster(isRefresh=false){
       render();return;
     }
 
+    // Clear previous week's assignments from the board
+    state.iems.forEach(c=>{c.name='';c.photo='';});
+    state.mics.forEach(c=>{c.name='';c.photo='';});
+    state.prod.forEach(p=>{p.name='';p.photo='';});
     stagingPool=freshPool;
+    poolSource='pco';
     // Apply tags
     stagingPool.forEach(person=>{
       const tag=savedTags[person.name];
