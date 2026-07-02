@@ -115,11 +115,33 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <span id="live-svc" style="font-size:11px;color:var(--text-dim)"></span>
   </div>
   <div class="hdr-right">
-    <button class="btn" id="pco-load-btn" style="display:none" onclick="togglePanel('pco-panel')"><i class="ti ti-cloud-download"></i> Load from PCO</button>
+    <button class="btn" id="pco-load-btn" style="display:none" onclick="togglePanel('pco-load-panel')"><i class="ti ti-cloud-download"></i> Load from PCO</button>
     <button class="btn" onclick="togglePanel('playlist-panel')"><i class="ti ti-playlist"></i> Services</button>
     <button class="btn" onclick="window.open('/display','_blank')"><i class="ti ti-external-link"></i> Display</button>
     <button class="btn" onclick="togglePanel('settings-panel')"><i class="ti ti-settings"></i> Settings</button>
   </div>
+</div>
+
+<!-- PCO LOAD PANEL -->
+<div class="panel" id="pco-load-panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div class="panel-title" style="margin:0">Load from Planning Center</div>
+    <div style="font-size:11px;color:var(--text-mid)" id="pco-load-status"></div>
+  </div>
+  <div class="field-row two" style="margin-bottom:10px">
+    <div class="pf"><label>Service type</label>
+      <select id="pco-svc-type" onchange="fetchUpcomingForType()"><option value="">Select…</option></select>
+    </div>
+    <div class="pf"><label>Plan / date</label>
+      <select id="pco-plan-sel"><option value="">Select…</option></select>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <button class="btn" onclick="loadRoster(false)"><i class="ti ti-users"></i> Load roster</button>
+    <button class="btn" id="refresh-btn" style="display:none" onclick="loadRoster(true)" title="Add new names only"><i class="ti ti-refresh"></i> Refresh</button>
+    <button class="btn" onclick="loadFromTags()"><i class="ti ti-tag"></i> Load from tags</button>
+  </div>
+  <div id="pco-status" style="font-size:11px;color:var(--text-mid);margin-top:8px"></div>
 </div>
 
 <!-- PLAYLIST PANEL -->
@@ -189,17 +211,16 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 <div class="panel" id="settings-panel">
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
 
-    <!-- LEFT: PCO + Updates -->
+    <!-- LEFT col -->
     <div>
-      <!-- Planning Center -->
+      <!-- PCO Credentials only -->
       <div style="margin-bottom:20px">
-        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Planning Center</div>
+        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Planning Center API</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <div id="pco-auth-dot" style="width:7px;height:7px;border-radius:50%;background:#444;flex-shrink:0"></div>
           <span id="pco-auth-label" style="font-size:12px;color:var(--text-mid)">Not connected</span>
         </div>
         <div id="pco-connect-msg-settings" style="display:none">
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Enter your Planning Center App ID and Personal Access Token to connect.</div>
           <div class="field-row" style="margin-bottom:6px">
             <div class="pf"><label>Application ID</label>
               <input type="text" id="pco-cred-appid-s" placeholder="Your PCO App ID"></div>
@@ -214,21 +235,27 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
           </div>
         </div>
         <div id="pco-controls-settings" style="display:none">
-          <div class="field-row two" style="margin-bottom:8px">
-            <div class="pf"><label>Service type</label>
-              <select id="pco-svc-type" onchange="fetchUpcomingForType()"><option value="">Select…</option></select>
-            </div>
-            <div class="pf"><label>Plan / date</label>
-              <select id="pco-plan-sel"><option value="">Select…</option></select>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn" onclick="loadRoster(false)"><i class="ti ti-users"></i> Load roster</button>
-            <button class="btn" id="refresh-btn" style="display:none" onclick="loadRoster(true)" title="Add new names only"><i class="ti ti-refresh"></i> Refresh</button>
-            <button class="btn" onclick="loadFromTags()"><i class="ti ti-tag"></i> Load from tags</button>
-          </div>
-          <div id="pco-status" style="font-size:11px;color:var(--text-mid);margin-top:6px"></div>
+          <div style="font-size:11px;color:var(--text-dim)">Connected — use the <strong style="color:var(--text)">Load from PCO</strong> button in the header to load a service roster.</div>
         </div>
+      </div>
+
+      <!-- Position configuration -->
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:20px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px">Position configuration</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Configure your IEM packs and production positions. Load a template to get started.</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn" onclick="loadPositionTemplate('sanctuary')"><i class="ti ti-template"></i> Load Sanctuary template</button>
+          <button class="btn" onclick="loadPositionTemplate('blank')"><i class="ti ti-plus"></i> Start blank</button>
+        </div>
+        <!-- IEM slots -->
+        <div style="font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:6px">IEM packs (up to 14)</div>
+        <div id="pos-iem-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;max-height:160px;overflow-y:auto"></div>
+        <button class="btn" style="padding:3px 10px;font-size:11px;margin-bottom:12px" onclick="addIemSlot()"><i class="ti ti-plus"></i> Add IEM slot</button>
+        <!-- Prod positions -->
+        <div style="font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:6px">Production positions</div>
+        <div id="pos-prod-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;max-height:160px;overflow-y:auto"></div>
+        <button class="btn" style="padding:3px 10px;font-size:11px;margin-bottom:10px" onclick="addProdPosition()"><i class="ti ti-plus"></i> Add position</button>
+        <button class="btn success" onclick="applyPositionConfig()"><i class="ti ti-check"></i> Apply configuration</button>
       </div>
 
       <!-- Updates -->
@@ -245,17 +272,16 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       <!-- Export / Import -->
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
         <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Backup &amp; transfer</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Export all your tags, people, rules, and services to transfer to another installation.</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Export all tags, people, rules, and services to transfer to another installation.</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn" onclick="exportData()"><i class="ti ti-download"></i> Export backup</button>
           <label class="btn" style="cursor:pointer"><i class="ti ti-upload"></i> Import backup<input type="file" accept=".json" style="display:none" onchange="importData(this)"></label>
         </div>
         <div id="import-result" style="margin-top:8px;font-size:11px;color:var(--text-dim)"></div>
       </div>
-      </div>
     </div>
 
-    <!-- RIGHT: People, Tags, Rules -->
+    <!-- RIGHT col: People, Tags, Rules -->
     <div>
       <!-- People library -->
       <div style="margin-bottom:16px">
@@ -344,6 +370,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   </div>
 </div>
 
+<!-- PEOPLE LIBRARY PANEL -->
 <!-- PEOPLE LIBRARY PANEL -->
 <!-- PEOPLE LIBRARY PANEL -->
 <div class="panel" id="people-panel">
@@ -537,6 +564,76 @@ async function preloadTagsPool(){
     peopleLibrary = ppl;
     rulesData = await fetch('/api/rules').then(r => r.json());
   } catch(e) {}
+}
+
+// ── Position configuration ────────────────────────────────────────────────────
+const SANCTUARY_TEMPLATE = {
+  iems: [
+    {role:'Drums'},{role:'Bass'},{role:'Gtr 1'},{role:'Gtr 2'},
+    {role:'Keys 1'},{role:'Keys 2'},{role:'Vox 1'},{role:'Vox 2'},
+    {role:'Vox 3'},{role:'Vox 4'},{role:'Vox 5'},{role:'Vox 6'},
+    {role:'Vox 7'},{role:'Vox 8'}
+  ],
+  prod: [
+    {position:'cg',role:'CG Operator'},{position:'cam',role:'Camera 1'},
+    {position:'cam',role:'Camera 2'},{position:'cam',role:'Camera 3'},
+    {position:'cam',role:'Camera 4'},{position:'foh',role:'FOH'},
+    {position:'mon',role:'Monitors'},{position:'light',role:'Lighting'},
+    {position:'stage',role:'Stage Hand'},{position:'stage',role:'Stage Hand'},
+    {position:'dir',role:'Producer'},{position:'dir',role:'Video Director'},
+    {position:'stream',role:'Shader'}
+  ]
+};
+let posConfig = { iems: [], prod: [] };
+
+function renderPositionConfig() {
+  posConfig.iems = state.iems.map(c => ({ role: c.role }));
+  posConfig.prod = state.prod.map(p => ({ position: p.position, role: p.role }));
+  renderIemConfig(); renderProdConfig();
+}
+
+function renderIemConfig() {
+  const el = document.getElementById('pos-iem-list'); if (!el) return;
+  el.innerHTML = posConfig.iems.map((s, i) => `
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:11px;color:var(--text-dim);width:20px;text-align:right">${i+1}</span>
+      <input type="text" value="${s.role}" onchange="posConfig.iems[${i}].role=this.value"
+        style="flex:1;padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s3);color:var(--text);font-size:12px;font-family:inherit">
+      <button onclick="posConfig.iems.splice(${i},1);renderIemConfig()" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px">×</button>
+    </div>`).join('');
+}
+
+function renderProdConfig() {
+  const PROD_OPTS = {cg:'CG',cam:'Camera',foh:'FOH',mon:'Monitors',light:'Lighting',stage:'Stage',dir:'Director',stream:'Streaming'};
+  const el = document.getElementById('pos-prod-list'); if (!el) return;
+  el.innerHTML = posConfig.prod.map((p, i) => `
+    <div style="display:flex;align-items:center;gap:6px">
+      <select onchange="posConfig.prod[${i}].position=this.value"
+        style="padding:4px 6px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s3);color:var(--text);font-size:11px;font-family:inherit;width:90px">
+        ${Object.entries(PROD_OPTS).map(([k,v])=>`<option value="${k}"${p.position===k?' selected':''}>${v}</option>`).join('')}
+      </select>
+      <input type="text" value="${p.role}" onchange="posConfig.prod[${i}].role=this.value"
+        style="flex:1;padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s3);color:var(--text);font-size:12px;font-family:inherit">
+      <button onclick="posConfig.prod.splice(${i},1);renderProdConfig()" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px">×</button>
+    </div>`).join('');
+}
+
+function addIemSlot() { posConfig.iems.push({role:'New slot'}); renderIemConfig(); }
+function addProdPosition() { posConfig.prod.push({position:'stage',role:'New position'}); renderProdConfig(); }
+
+function loadPositionTemplate(name) {
+  if (name === 'sanctuary') posConfig = JSON.parse(JSON.stringify(SANCTUARY_TEMPLATE));
+  else posConfig = { iems:[{role:'Slot 1'}], prod:[{position:'foh',role:'FOH'}] };
+  renderIemConfig(); renderProdConfig();
+}
+
+function applyPositionConfig() {
+  if (!confirm('This will replace all current positions and clear all names. Continue?')) return;
+  state.iems = posConfig.iems.map((s,i) => ({id:'i'+(i+1),ch:i+1,role:s.role,name:'',photo:'',status:'na',bat:null,mix:'',freq:''}));
+  state.mics = posConfig.iems.map((s,i) => ({id:'m'+(i+1),ch:i+1,role:s.role,name:'',photo:'',status:'na',bat:null,type:'Belt pack',freq:''}));
+  state.prod = posConfig.prod.map((p,i) => ({id:'p'+(i+1),position:p.position,role:p.role,name:'',photo:'',note:'',status:'active'}));
+  render(); push();
+  toast('<i class="ti ti-check"></i> Position configuration applied');
 }
 
 async function loadSettingsPanel() {
@@ -992,7 +1089,7 @@ function addProdSlot(){
 
 // ── Panel toggle ───────────────────────────────────────────────────────────────
 function togglePanel(id){
-  const panels=['pco-panel','playlist-panel','tag-panel','people-panel','rules-panel','settings-panel'];
+  const panels=['pco-load-panel','playlist-panel','tag-panel','people-panel','rules-panel','settings-panel'];
   panels.forEach(pid=>{
     const el=document.getElementById(pid);
     if(!el) return;
@@ -1000,8 +1097,9 @@ function togglePanel(id){
     else el.classList.remove('open');
   });
   if(id==='playlist-panel'&&document.getElementById('playlist-panel').classList.contains('open'))loadPlaylistUI();
+  if(id==='pco-load-panel'&&document.getElementById('pco-load-panel').classList.contains('open'))fetchPCOServices();
   if(id==='settings-panel'&&document.getElementById('settings-panel').classList.contains('open')){
-    checkPCOAuth(); loadTags(); loadPeoplePanel(); loadRulesPanel(); loadSettingsPanel();
+    checkPCOAuth(); loadTags(); loadPeoplePanel(); loadRulesPanel(); loadSettingsPanel(); renderPositionConfig();
   }
 }
 
