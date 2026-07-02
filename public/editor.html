@@ -246,6 +246,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
           <button class="btn" onclick="loadPositionTemplate('sanctuary')"><i class="ti ti-template"></i> Load Sanctuary template</button>
           <button class="btn" onclick="loadPositionTemplate('blank')"><i class="ti ti-plus"></i> Start blank</button>
+          <button class="btn" onclick="loadPositionTemplate('saved')" id="load-saved-tpl-btn" style="display:none"><i class="ti ti-bookmark"></i> Load saved template</button>
         </div>
         <!-- IEM slots -->
         <div style="font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:6px">IEM packs (up to 14)</div>
@@ -255,7 +256,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         <div style="font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:6px">Production positions</div>
         <div id="pos-prod-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;max-height:160px;overflow-y:auto"></div>
         <button class="btn" style="padding:3px 10px;font-size:11px;margin-bottom:10px" onclick="addProdPosition()"><i class="ti ti-plus"></i> Add position</button>
-        <button class="btn success" onclick="applyPositionConfig()"><i class="ti ti-check"></i> Apply configuration</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn success" onclick="applyPositionConfig()"><i class="ti ti-check"></i> Apply configuration</button>
+          <button class="btn" onclick="savePositionTemplate()"><i class="ti ti-bookmark"></i> Save as template</button>
+        </div>
+        <div id="pos-tpl-result" style="margin-top:6px;font-size:11px;color:var(--text-dim)"></div>
       </div>
 
       <!-- Updates -->
@@ -590,6 +595,15 @@ function renderPositionConfig() {
   posConfig.iems = state.iems.map(c => ({ role: c.role }));
   posConfig.prod = state.prod.map(p => ({ position: p.position, role: p.role }));
   renderIemConfig(); renderProdConfig();
+  // Show saved template button if one exists
+  try {
+    const saved = JSON.parse(localStorage.getItem('pos-template') || 'null');
+    const btn = document.getElementById('load-saved-tpl-btn');
+    if (saved && btn) {
+      btn.style.display = 'inline-flex';
+      btn.innerHTML = '<i class="ti ti-bookmark"></i> Load "' + saved.name + '"';
+    }
+  } catch(e) {}
 }
 
 function renderIemConfig() {
@@ -623,8 +637,29 @@ function addProdPosition() { posConfig.prod.push({position:'stage',role:'New pos
 
 function loadPositionTemplate(name) {
   if (name === 'sanctuary') posConfig = JSON.parse(JSON.stringify(SANCTUARY_TEMPLATE));
+  else if (name === 'saved') {
+    try {
+      const saved = JSON.parse(localStorage.getItem('pos-template') || 'null');
+      if (saved) posConfig = saved;
+      else { toast('No saved template found', '#f59e0b'); return; }
+    } catch(e) { toast('Could not load template', '#ef4444'); return; }
+  }
   else posConfig = { iems:[{role:'Slot 1'}], prod:[{position:'foh',role:'FOH'}] };
   renderIemConfig(); renderProdConfig();
+}
+
+function savePositionTemplate() {
+  const name = prompt('Template name:', state.serviceName || 'My template');
+  if (!name) return;
+  const tpl = { name, iems: posConfig.iems, prod: posConfig.prod, savedAt: new Date().toISOString() };
+  try {
+    localStorage.setItem('pos-template', JSON.stringify(tpl));
+    document.getElementById('load-saved-tpl-btn').style.display = 'inline-flex';
+    document.getElementById('load-saved-tpl-btn').textContent = '';
+    document.getElementById('load-saved-tpl-btn').innerHTML = '<i class="ti ti-bookmark"></i> Load "' + name + '"';
+    document.getElementById('pos-tpl-result').innerHTML = '<span style="color:#4ade80">✓ Template "' + name + '" saved</span>';
+    toast('<i class="ti ti-bookmark"></i> Template saved: ' + name);
+  } catch(e) { toast('Could not save template', '#ef4444'); }
 }
 
 function applyPositionConfig() {
