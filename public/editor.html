@@ -823,7 +823,7 @@ function poolOptions(assigned, slotType='iem'){
     return hasIem || (!hasIem && !hasProd);
   });
 
-  return filtered.map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
+  return filtered.map(p=>`<option value="${p.name}"${p.name===assigned?' selected':''}>${p.name}</option>`).join('');
 }
 
 function renderList(type){
