@@ -131,6 +131,16 @@ function setupAutoUpdater() {
       'var pctEl=document.getElementById("__ub-pct");' +
       'if(bar) bar.style.width="' + pct + '%";' +
       'if(pctEl) pctEl.textContent="' + pct + '%";' +
+      // At 100%, start a 4-second fallback timer to show install prompt
+      (pct >= 100 ?
+      'if(!window.__ubTimer) window.__ubTimer=setTimeout(function(){' +
+      'var old=document.getElementById("__ub");if(old)old.remove();' +
+      'var b=document.createElement("div");b.id="__ub";' +
+      'b.style.cssText="position:fixed;top:0;left:0;right:0;z-index:99999;background:#0f1923;border-bottom:2px solid rgba(55,138,221,0.7);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-family:Inter,system-ui,sans-serif;font-size:13px;color:#e8e9ef;gap:16px";' +
+      'b.innerHTML="<div style=\'display:flex;align-items:center;gap:10px\'><span style=\'font-size:18px\'>⬆</span><div><div style=\'font-weight:700;color:#7eb8f5\'>Update downloaded — ready to install</div><div style=\'font-size:11px;color:rgba(255,255,255,0.4)\'>App will restart to apply</div></div></div><div style=\'display:flex;gap:8px\'><button onclick=\'this.parentNode.parentNode.remove()\' style=\'padding:6px 14px;border-radius:7px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;font-size:12px\'>Skip</button><button onclick=\'fetch(String.fromCharCode(47,97,112,105,47,105,110,115,116,97,108,108,45,117,112,100,97,116,101),{method:String.fromCharCode(80,79,83,84)})\' style=\'padding:6px 16px;border-radius:7px;border:none;background:#378ADD;color:#fff;cursor:pointer;font-size:12px;font-weight:600\'>Restart and install</button></div>";' +
+      'document.body.prepend(b);' +
+      '},4000);'
+      : '') +
       '})()'
     );
   });
