@@ -266,6 +266,13 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         </div>
         <div id="import-result" style="margin-top:8px;font-size:11px;color:var(--text-dim)"></div>
       </div>
+
+      <!-- Remote access -->
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Remote access</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Open these on any device on the same network — everything syncs live. The .local address stays the same even if the IP changes.</div>
+        <div id="connect-info" style="font-size:12px;color:var(--text-mid)">Loading…</div>
+      </div>
     </div>
 
     <!-- RIGHT col: People, Tags, Rules -->
@@ -735,7 +742,26 @@ function applyPositionConfig() {
   toast('<i class="ti ti-check"></i> Position configuration applied');
 }
 
+async function loadConnectInfo() {
+  const el = document.getElementById('connect-info');
+  if (!el) return;
+  try {
+    const info = await fetch('/api/connect-info').then(r=>r.json());
+    const mk = (url,label) => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <code style="flex:1;padding:6px 10px;background:var(--s3);border:1px solid var(--border-mid);border-radius:6px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${url}</code>
+        <button class="btn" style="padding:4px 10px;font-size:11px" onclick="navigator.clipboard.writeText('${url}');toast('Copied')">Copy</button>
+        <span style="font-size:10px;color:var(--text-dim);width:64px">${label}</span>
+      </div>`;
+    let out = mk(`http://${info.hostname}:${info.port}/edit`, 'stable');
+    (info.ips||[]).forEach(ip => out += mk(`http://${ip}:${info.port}/edit`, 'IP'));
+    out += `<div style="font-size:10px;color:var(--text-dim);margin-top:4px">Display view: replace /edit with /display. For a truly fixed numeric IP, reserve this Mac's address in your router (DHCP reservation).</div>`;
+    el.innerHTML = out;
+  } catch(e) { el.textContent = 'Unavailable'; }
+}
+
 async function loadSettingsPanel() {
+  loadConnectInfo();
   try {
     const info = await fetch('/api/version').then(r => r.json());
     document.getElementById('version-label').textContent = `Version ${info.version}`;

@@ -799,6 +799,19 @@ app.post('/api/import', (req, res) => {
   }
 });
 
+// Connection info for remote access (stable .local hostname + LAN IPs)
+app.get('/api/connect-info', (req, res) => {
+  const os = require('os');
+  const nets = os.networkInterfaces();
+  const ips = [];
+  Object.values(nets).forEach(list => (list||[]).forEach(n => {
+    if (n.family === 'IPv4' && !n.internal) ips.push(n.address);
+  }));
+  let host = os.hostname();
+  if (!host.endsWith('.local')) host = host.replace(/\.local$/,'') + '.local';
+  res.json({ hostname: host, ips, port: PORT });
+});
+
 app.get('/api/version', (req, res) => {
   try {
     const pkg = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'package.json'), 'utf8'));
