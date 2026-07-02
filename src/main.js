@@ -114,10 +114,12 @@ function setupAutoUpdater() {
     console.log('[Updater] Update available:', info.version);
     inject(
       '(function(){' +
-      'var b=document.getElementById("__ub");' +
-      'if(!b){b=document.createElement("div");b.id="__ub";document.body.prepend(b);}' +
-      'b.style.cssText="position:fixed;top:0;left:0;right:0;z-index:99999;background:#1a1f2e;border-bottom:1px solid rgba(55,138,221,0.5);padding:10px 20px;font-family:Inter,system-ui,sans-serif;font-size:13px;color:#e8e9ef";' +
-      'b.innerHTML="<div style=\'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px\'><span style=\'color:#7eb8f5;font-weight:600\'>Update v' + info.version + ' available — downloading</span><span id=\'__ub-pct\' style=\'color:rgba(255,255,255,0.5);font-size:11px\'>0%</span></div><div style=\'height:4px;background:rgba(255,255,255,0.1);border-radius:2px\'><div id=\'__ub-bar\' style=\'height:100%;width:0%;background:#378ADD;border-radius:2px;transition:width 0.5s\'></div></div>";' +
+      'var box=document.getElementById("update-inline");' +
+      'var title=document.getElementById("update-inline-title");' +
+      'var pctEl=document.getElementById("update-inline-pct");' +
+      'if(box) box.style.display="block";' +
+      'if(title) title.textContent="Update v' + info.version + ' available — downloading";' +
+      'if(pctEl) pctEl.textContent="0%";' +
       '})()'
     );
   });
@@ -127,8 +129,10 @@ function setupAutoUpdater() {
     console.log('[Updater] Download progress:', pct + '%');
     inject(
       '(function(){' +
-      'var bar=document.getElementById("__ub-bar");' +
-      'var pctEl=document.getElementById("__ub-pct");' +
+      'var bar=document.getElementById("update-inline-bar");' +
+      'var barWrap=document.getElementById("update-inline-bar-wrap");' +
+      'var pctEl=document.getElementById("update-inline-pct");' +
+      'if(barWrap) barWrap.style.display="block";' +
       'if(bar) bar.style.width="' + pct + '%";' +
       'if(pctEl) pctEl.textContent="' + pct + '%";' +
       // At 100%, start a 4-second fallback timer to show install prompt
