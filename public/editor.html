@@ -240,6 +240,27 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   </div>
 
   <div id="set-tab-board" style="display:none">
+    <!-- Display layout -->
+    <div class="set-card">
+      <div class="set-title">Display layout</div>
+      <div class="set-desc">Controls how the backstage board is arranged. Changes apply live to every screen.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:end">
+        <div class="pf"><label>Right zone</label>
+          <select id="view-zone" onchange="setBoardView('rightZone',this.value)">
+            <option value="crew">Production crew</option>
+            <option value="ros">Run of show (from Planning Center)</option>
+            <option value="none">Hidden — IEM packs full width</option>
+          </select>
+        </div>
+        <div class="pf"><label>Zone split — IEM side width: <span id="view-split-lbl">50</span>%</label>
+          <input type="range" min="30" max="70" step="5" value="50" id="view-split" style="width:100%"
+            oninput="document.getElementById('view-split-lbl').textContent=this.value"
+            onchange="setBoardView('split',parseInt(this.value))">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:8px">Run of show fills automatically when you load a service from Planning Center.</div>
+    </div>
+
     <!-- Position configuration -->
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:20px">
         <div class="set-title">Position configuration</div>
@@ -1411,6 +1432,22 @@ function addProdSlot(){
 }
 
 // ── Panel toggle ───────────────────────────────────────────────────────────────
+function setBoardView(key, val){
+  state.view = state.view || { split: 50, rightZone: 'crew' };
+  state.view[key] = val;
+  push();
+  toast('<i class="ti ti-layout"></i> Board layout updated');
+}
+function syncBoardViewControls(){
+  const v = state.view || { split: 50, rightZone: 'crew' };
+  const z = document.getElementById('view-zone');
+  const s = document.getElementById('view-split');
+  const l = document.getElementById('view-split-lbl');
+  if (z) z.value = v.rightZone || 'crew';
+  if (s) s.value = v.split || 50;
+  if (l) l.textContent = v.split || 50;
+}
+
 function setTab(name){
   ['integrations','board','library','system'].forEach(t=>{
     const pane=document.getElementById('set-tab-'+t);
@@ -1431,7 +1468,7 @@ function togglePanel(id){
   if(id==='playlist-panel'&&document.getElementById('playlist-panel').classList.contains('open'))loadPlaylistUI();
   if(id==='pco-load-panel'&&document.getElementById('pco-load-panel').classList.contains('open'))fetchPCOServices();
   if(id==='settings-panel'&&document.getElementById('settings-panel').classList.contains('open')){
-    checkPCOAuth(); loadTags(); loadPeoplePanel(); loadRulesPanel(); loadSettingsPanel(); renderPositionConfig(); loadShurePanel();
+    checkPCOAuth(); loadTags(); loadPeoplePanel(); loadRulesPanel(); loadSettingsPanel(); renderPositionConfig(); loadShurePanel(); syncBoardViewControls();
   }
 }
 
@@ -1545,6 +1582,17 @@ async function loadRoster(isRefresh=false){
   try{
     const data=await fetch(`/api/pco-roster?typeId=${typeId}&planId=${planId}`).then(r=>r.json());
     if(data.error)throw new Error(data.error);
+    // Pull run of show (plan items) for the board's ROS view
+    try{
+      const items=await fetch(`/api/pco/services/v2/service_types/${typeId}/plans/${planId}/items?per_page=100`).then(r=>r.json());
+      if(items&&items.data){
+        state.ros=items.data.map(it=>({
+          type:(it.attributes.item_type||'item').toLowerCase(),
+          title:it.attributes.title||'',
+          length:it.attributes.length||0
+        }));
+      }
+    }catch(e){ /* ROS optional — roster load continues */ }
     const freshPool=[];
     Object.entries(data.grouped).forEach(([team,members])=>{
       members.forEach(m=>freshPool.push({...m,classified:classifyPerson(m)}));

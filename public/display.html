@@ -68,6 +68,14 @@ html, body {
 .bat-green { color: #22c55e; } .bat-green .bat-fill { background: #22c55e; }
 .bat-amber { color: #f59e0b; } .bat-amber .bat-fill { background: #f59e0b; }
 .bat-red { color: #ef4444; } .bat-red .bat-fill { background: #ef4444; }
+.ros-header { display:flex; align-items:center; gap:10px; padding:10px 28px 4px; }
+.ros-header-label { font-size:10px; font-weight:900; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-mid); white-space:nowrap; }
+.ros-header-line { flex:1; height:1px; background:var(--border-mid); }
+.ros-row { display:grid; grid-template-columns:34px 1fr 64px; gap:0 12px; align-items:center; padding:7px 28px; border-bottom:1px solid var(--border); }
+.ros-num { font-size:11px; font-weight:900; color:var(--text-dim); font-variant-numeric:tabular-nums; text-align:right; }
+.ros-title { font-size:14px; font-weight:700; letter-spacing:0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ros-row.song .ros-title { color:#7eb8f5; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; }
+.ros-len { font-size:12px; font-weight:700; color:var(--text-mid); font-variant-numeric:tabular-nums; text-align:right; }
 .avatar-circle {
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
   font-weight: 900; color: #fff; text-transform: uppercase; flex-shrink: 0; overflow: hidden;
@@ -141,7 +149,7 @@ html, body {
     </div>
   </div>
 
-  <div class="body">
+  <div class="body" id="board-body">
 
     <!-- LEFT: IEM packs -->
     <div class="col">
@@ -158,12 +166,12 @@ html, body {
       <div class="row-list" id="iem-list"></div>
     </div>
 
-    <div class="col-divider"></div>
+    <div class="col-divider" id="col-divider"></div>
 
     <!-- RIGHT: Production crew fills top, bottom left transparent for clock overlay -->
-    <div class="col" style="display:flex;flex-direction:column">
+    <div class="col" style="display:flex;flex-direction:column" id="right-col">
       <div class="col-head">
-        <span class="col-title">Production crew</span>
+        <span class="col-title" id="right-title">Production crew</span>
         <span class="col-count" id="prod-ct"></span>
       </div>
       <div class="prod-list" id="prod-list"></div>
@@ -264,15 +272,64 @@ function scaleText(container){
   }
 }
 
+function fmtLen(sec){
+  if(!sec||isNaN(sec))return '';
+  const m=Math.floor(sec/60), s=sec%60;
+  return m+':'+String(s).padStart(2,'0');
+}
+
+function renderROS(ros){
+  if(!ros||!ros.length)return '<div style="padding:24px 28px;color:var(--text-dim);font-size:13px">No plan loaded — load a service from Planning Center in the editor.</div>';
+  let n=0;
+  return ros.map(it=>{
+    if(it.type==='header')return `<div class="ros-header"><span class="ros-header-label">${it.title||''}</span><span class="ros-header-line"></span></div>`;
+    n++;
+    const song=it.type==='song';
+    return `<div class="ros-row${song?' song':''}">
+      <div class="ros-num">${n}</div>
+      <div class="ros-title">${it.title||''}</div>
+      <div class="ros-len">${fmtLen(it.length)}</div>
+    </div>`;
+  }).join('');
+}
+
 function render(s){
   document.getElementById('svc-name').textContent=s.serviceName||'Sunday service';
   const activeIem=s.iems.filter(c=>c.status==='active').length;
   const activeProd=s.prod.filter(c=>c.status==='active'&&!c.hidden).length;
   document.getElementById('iem-ct').textContent=`${activeIem} of ${s.iems.length} active`;
-  document.getElementById('prod-ct').textContent=`${activeProd} active`;
-  document.getElementById('footer-stats').textContent=`${s.serviceName||'Sunday service'} · ${activeIem} IEMs · ${activeProd} crew`;
   document.getElementById('iem-list').innerHTML=s.iems.map(makeIemRow).join('');
-  document.getElementById('prod-list').innerHTML = renderProd(s.prod);
+
+  // View configuration: zone split + right zone content
+  const v = s.view || { split: 50, rightZone: 'crew' };
+  const body = document.getElementById('board-body');
+  const rightCol = document.getElementById('right-col');
+  const divider = document.getElementById('col-divider');
+  const rightTitle = document.getElementById('right-title');
+  const prodCt = document.getElementById('prod-ct');
+  const list = document.getElementById('prod-list');
+
+  if (v.rightZone === 'none') {
+    body.style.gridTemplateColumns = '1fr';
+    rightCol.style.display = 'none';
+    divider.style.display = 'none';
+  } else {
+    const sp = Math.min(70, Math.max(30, v.split || 50));
+    body.style.gridTemplateColumns = `${sp}fr 1px ${100 - sp}fr`;
+    rightCol.style.display = 'flex';
+    divider.style.display = '';
+    if (v.rightZone === 'ros') {
+      rightTitle.textContent = 'Run of show';
+      const items=(s.ros||[]).filter(i=>i.type!=='header').length;
+      prodCt.textContent = items ? items + ' items' : '';
+      list.innerHTML = renderROS(s.ros);
+    } else {
+      rightTitle.textContent = 'Production crew';
+      prodCt.textContent = `${activeProd} active`;
+      list.innerHTML = renderProd(s.prod);
+    }
+  }
+  document.getElementById('footer-stats').textContent=`${s.serviceName||'Sunday service'} · ${activeIem} IEMs · ${activeProd} crew`;
 }
 
 function connect(){
