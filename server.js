@@ -840,9 +840,9 @@ function pollShureDevice(dev) {
     sock.on('error', err => { resolve({ ok:false, error: err.code || err.message, results }); });
     sock.on('close', () => resolve({ ok:true, results }));
     sock.connect(dev.port || 2202, dev.ip, () => {
-      (dev.channels||[]).forEach(c => {
-        sock.write(`< GET ${c.ch} BATT_BARS >`);
-        sock.write(`< GET ${c.ch} CHAN_NAME >`);
+      [1,2,3,4].forEach(ch => {
+        sock.write(`< GET ${ch} BATT_BARS >`);
+        sock.write(`< GET ${ch} CHAN_NAME >`);
       });
       setTimeout(() => sock.end(), 1200);
     });
@@ -854,7 +854,7 @@ async function pollAllShure() {
   let changed = false;
   for (const dev of shureDevices) {
     const r = await pollShureDevice(dev);
-    shureStatus[dev.id] = { ok: r.ok && Object.keys(r.results).length > 0, lastSeen: r.ok ? Date.now() : (shureStatus[dev.id]?.lastSeen || null), error: r.error || null };
+    shureStatus[dev.id] = { ok: r.ok && Object.keys(r.results).length > 0, lastSeen: r.ok ? Date.now() : (shureStatus[dev.id]?.lastSeen || null), error: r.error || null, channels: r.results };
     (dev.channels||[]).forEach(c => {
       const res = r.results[c.ch];
       if (!res) return;
