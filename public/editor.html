@@ -55,6 +55,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 /* Assignment table */
 .assign-list{flex:1;overflow-y:auto;min-height:0}
+.set-tab-btn{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--text-mid);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer}
+.set-tab-btn:hover{background:var(--s3)}
+.set-tab-btn.active{background:var(--s3);border-color:var(--border-mid);color:var(--text)}
 .assign-row{display:grid;align-items:center;padding:6px 12px;border-bottom:1px solid var(--border);gap:8px}
 .assign-row>*{min-width:0}
 .row-select{min-width:0;max-width:100%}
@@ -178,11 +181,17 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 <!-- SETTINGS PANEL -->
 <div class="panel" id="settings-panel">
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+  <div style="display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--border);padding-bottom:12px">
+    <button class="set-tab-btn active" id="tab-btn-integrations" onclick="setTab('integrations')"><i class="ti ti-plug"></i> Integrations</button>
+    <button class="set-tab-btn" id="tab-btn-board" onclick="setTab('board')"><i class="ti ti-layout-grid"></i> Board</button>
+    <button class="set-tab-btn" id="tab-btn-library" onclick="setTab('library')"><i class="ti ti-users"></i> Library</button>
+    <button class="set-tab-btn" id="tab-btn-system" onclick="setTab('system')"><i class="ti ti-settings"></i> System</button>
+  </div>
 
-    <!-- LEFT col -->
-    <div>
-      <!-- PCO Credentials only -->
+  <div id="set-tab-integrations">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div>
+        <!-- PCO Credentials only -->
       <div style="margin-bottom:20px">
         <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Planning Center API</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -208,7 +217,27 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         </div>
       </div>
 
-      <!-- Position configuration -->
+      
+      </div>
+      <div>
+        <!-- Shure live battery -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px">Shure live battery</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Poll ULX-D / QLX-D / Axient Digital receivers on the network for transmitter battery. Battery shows on the board and turns the dot amber when low. (PSM1000 packs have no return channel and can't report battery.)</div>
+        <div id="shure-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="addShureDevice()"><i class="ti ti-plus"></i> Add receiver</button>
+          <button class="btn success" onclick="saveShureDevices()"><i class="ti ti-check"></i> Save &amp; start polling</button>
+        </div>
+      </div>
+
+      
+      </div>
+    </div>
+  </div>
+
+  <div id="set-tab-board" style="display:none">
+    <!-- Position configuration -->
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:20px">
         <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px">Position configuration</div>
         <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Configure your IEM packs and production positions. Load a template to get started.</div>
@@ -232,63 +261,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         <div id="pos-tpl-result" style="margin-top:6px;font-size:11px;color:var(--text-dim)"></div>
       </div>
 
-      <!-- Updates -->
-      <div style="border-top:1px solid var(--border);padding-top:16px">
-        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Software update</div>
-        <div id="version-label" style="font-size:12px;color:var(--text-mid);margin-bottom:10px">Version —</div>
-        <!-- Inline update status card -->
-        <div id="update-inline" style="display:none;margin-bottom:10px;padding:10px 12px;border-radius:8px;border:1px solid rgba(55,138,221,0.4);background:rgba(55,138,221,0.08)">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
-            <span id="update-inline-title" style="font-size:12px;font-weight:600;color:#7eb8f5"></span>
-            <span id="update-inline-pct" style="font-size:11px;color:var(--text-dim)"></span>
-          </div>
-          <div id="update-inline-bar-wrap" style="display:none;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-bottom:8px">
-            <div id="update-inline-bar" style="height:100%;width:0%;background:#378ADD;border-radius:2px;transition:width 0.4s"></div>
-          </div>
-          <div id="update-inline-actions" style="display:none;gap:6px">
-            <button onclick="document.getElementById('update-inline').style.display='none'" style="padding:4px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;font-size:11px;font-family:inherit">Skip</button>
-            <button onclick="fetch('/api/install-update',{method:'POST'})" style="padding:4px 14px;border-radius:6px;border:none;background:#378ADD;color:#fff;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit">Restart &amp; install</button>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn" onclick="checkForUpdates(this)"><i class="ti ti-refresh"></i> Check for updates</button>
-          <span id="update-result" style="font-size:11px;color:var(--text-dim)"></span>
-        </div>
-      </div>
+      
+  </div>
 
-      <!-- Export / Import -->
-      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
-        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Backup &amp; transfer</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Export all tags, people, rules, and services to transfer to another installation.</div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button class="btn" onclick="exportData()"><i class="ti ti-download"></i> Export backup</button>
-          <label class="btn" style="cursor:pointer"><i class="ti ti-upload"></i> Import backup<input type="file" accept=".json" style="display:none" onchange="importData(this)"></label>
-        </div>
-        <div id="import-result" style="margin-top:8px;font-size:11px;color:var(--text-dim)"></div>
-      </div>
-
-      <!-- Shure live battery -->
-      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
-        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px">Shure live battery</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Poll ULX-D / QLX-D / Axient Digital receivers on the network for transmitter battery. Battery shows on the board and turns the dot amber when low. (PSM1000 packs have no return channel and can't report battery.)</div>
-        <div id="shure-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
-        <div style="display:flex;gap:8px">
-          <button class="btn" onclick="addShureDevice()"><i class="ti ti-plus"></i> Add receiver</button>
-          <button class="btn success" onclick="saveShureDevices()"><i class="ti ti-check"></i> Save &amp; start polling</button>
-        </div>
-      </div>
-
-      <!-- Remote access -->
-      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
-        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Remote access</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Open these on any device on the same network — everything syncs live. The .local address stays the same even if the IP changes.</div>
-        <div id="connect-info" style="font-size:12px;color:var(--text-mid)">Loading…</div>
-      </div>
-    </div>
-
-    <!-- RIGHT col: People, Tags, Rules -->
-    <div>
-      <!-- People library -->
+  <div id="set-tab-library" style="display:none">
+    <!-- People library -->
       <div style="margin-bottom:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase">People library <span id="people-count" style="font-weight:400"></span></div>
@@ -372,6 +349,59 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       </div>
     </div>
 
+  </div>
+
+  <div id="set-tab-system" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div>
+        <!-- Updates -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Software update</div>
+        <div id="version-label" style="font-size:12px;color:var(--text-mid);margin-bottom:10px">Version —</div>
+        <!-- Inline update status card -->
+        <div id="update-inline" style="display:none;margin-bottom:10px;padding:10px 12px;border-radius:8px;border:1px solid rgba(55,138,221,0.4);background:rgba(55,138,221,0.08)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+            <span id="update-inline-title" style="font-size:12px;font-weight:600;color:#7eb8f5"></span>
+            <span id="update-inline-pct" style="font-size:11px;color:var(--text-dim)"></span>
+          </div>
+          <div id="update-inline-bar-wrap" style="display:none;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-bottom:8px">
+            <div id="update-inline-bar" style="height:100%;width:0%;background:#378ADD;border-radius:2px;transition:width 0.4s"></div>
+          </div>
+          <div id="update-inline-actions" style="display:none;gap:6px">
+            <button onclick="document.getElementById('update-inline').style.display='none'" style="padding:4px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;font-size:11px;font-family:inherit">Skip</button>
+            <button onclick="fetch('/api/install-update',{method:'POST'})" style="padding:4px 14px;border-radius:6px;border:none;background:#378ADD;color:#fff;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit">Restart &amp; install</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn" onclick="checkForUpdates(this)"><i class="ti ti-refresh"></i> Check for updates</button>
+          <span id="update-result" style="font-size:11px;color:var(--text-dim)"></span>
+        </div>
+      </div>
+
+      
+        <!-- Export / Import -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Backup &amp; transfer</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Export all tags, people, rules, and services to transfer to another installation.</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn" onclick="exportData()"><i class="ti ti-download"></i> Export backup</button>
+          <label class="btn" style="cursor:pointer"><i class="ti ti-upload"></i> Import backup<input type="file" accept=".json" style="display:none" onchange="importData(this)"></label>
+        </div>
+        <div id="import-result" style="margin-top:8px;font-size:11px;color:var(--text-dim)"></div>
+      </div>
+
+      
+      </div>
+      <div>
+        <!-- Remote access -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Remote access</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Open these on any device on the same network — everything syncs live. The .local address stays the same even if the IP changes.</div>
+        <div id="connect-info" style="font-size:12px;color:var(--text-mid)">Loading…</div>
+      </div>
+
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1311,6 +1341,15 @@ function addProdSlot(){
 }
 
 // ── Panel toggle ───────────────────────────────────────────────────────────────
+function setTab(name){
+  ['integrations','board','library','system'].forEach(t=>{
+    const pane=document.getElementById('set-tab-'+t);
+    const btn=document.getElementById('tab-btn-'+t);
+    if(pane) pane.style.display = t===name ? 'block' : 'none';
+    if(btn) btn.classList.toggle('active', t===name);
+  });
+}
+
 function togglePanel(id){
   const panels=['pco-load-panel','playlist-panel','tag-panel','people-panel','rules-panel','settings-panel'];
   panels.forEach(pid=>{
