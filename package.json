@@ -1,6 +1,6 @@
 {
   "name": "show-dashboard",
-  "version": "1.0.69",
+  "version": "1.0.73",
   "description": "RF Assign — live mic, IEM, and production crew assignments",
   "main": "src/main.js",
   "author": {"name": "RJ Emerick", "email": "rjeemerick@gmail.com"},
@@ -16,6 +16,7 @@
   "build": {
     "appId": "com.showdashboard.app",
     "productName": "RF Assign",
+    "artifactName": "RF-Assign-${version}-${arch}.${ext}",
     "copyright": "Copyright 2024",
     "mac": {
       "category": "public.app-category.productivity",
