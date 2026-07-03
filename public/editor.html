@@ -55,6 +55,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 /* Assignment table */
 .assign-list{flex:1;overflow-y:auto;min-height:0}
+.set-card{background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
+.set-title{font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-mid);margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.set-desc{font-size:11px;color:var(--text-dim);margin-bottom:12px;line-height:1.45}
 .set-tab-btn{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--text-mid);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer}
 .set-tab-btn:hover{background:var(--s3)}
 .set-tab-btn.active{background:var(--s3);border-color:var(--border-mid);color:var(--text)}
@@ -192,8 +195,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
       <div>
         <!-- PCO Credentials only -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Planning Center API</div>
+      <div class="set-card">
+        <div class="set-title">Planning Center API</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <div id="pco-auth-dot" style="width:7px;height:7px;border-radius:50%;background:#444;flex-shrink:0"></div>
           <span id="pco-auth-label" style="font-size:12px;color:var(--text-mid)">Not connected</span>
@@ -221,8 +224,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       </div>
       <div>
         <!-- Shure live battery -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px">Shure live battery</div>
+      <div class="set-card">
+        <div class="set-title">Shure live battery</div>
         <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Poll ULX-D / QLX-D / Axient Digital receivers on the network for transmitter battery. Battery shows on the board and turns the dot amber when low. (PSM1000 packs have no return channel and can't report battery.)</div>
         <div id="shure-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
         <div style="display:flex;gap:8px">
@@ -239,21 +242,25 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   <div id="set-tab-board" style="display:none">
     <!-- Position configuration -->
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:20px">
-        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px">Position configuration</div>
+        <div class="set-title">Position configuration</div>
         <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Configure your IEM packs and production positions. Load a template to get started.</div>
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
           <button class="btn" onclick="loadPositionTemplate('sanctuary')"><i class="ti ti-template"></i> Load Sanctuary template</button>
           <button class="btn" onclick="loadPositionTemplate('blank')"><i class="ti ti-plus"></i> Start blank</button>
           <button class="btn" onclick="loadPositionTemplate('saved')" id="load-saved-tpl-btn" style="display:none"><i class="ti ti-bookmark"></i> Load saved template</button>
         </div>
-        <!-- IEM slots -->
-        <div style="font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:6px">IEM packs (up to 14)</div>
-        <div id="pos-iem-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;max-height:160px;overflow-y:auto"></div>
-        <button class="btn" style="padding:3px 10px;font-size:11px;margin-bottom:12px" onclick="addIemSlot()"><i class="ti ti-plus"></i> Add IEM slot</button>
-        <!-- Prod positions -->
-        <div style="font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:6px">Production positions</div>
-        <div id="pos-prod-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;max-height:160px;overflow-y:auto"></div>
-        <button class="btn" style="padding:3px 10px;font-size:11px;margin-bottom:10px" onclick="addProdPosition()"><i class="ti ti-plus"></i> Add position</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:14px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:6px">IEM packs</div>
+            <div id="pos-iem-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;max-height:340px;overflow-y:auto"></div>
+            <button class="btn" style="padding:3px 10px;font-size:11px" onclick="addIemSlot()"><i class="ti ti-plus"></i> Add IEM slot</button>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:6px">Production positions</div>
+            <div id="pos-prod-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;max-height:340px;overflow-y:auto"></div>
+            <button class="btn" style="padding:3px 10px;font-size:11px" onclick="addProdPosition()"><i class="ti ti-plus"></i> Add position</button>
+          </div>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn success" onclick="applyPositionConfig()"><i class="ti ti-check"></i> Apply configuration</button>
           <button class="btn" onclick="savePositionTemplate()"><i class="ti ti-bookmark"></i> Save as template</button>
@@ -264,11 +271,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       
   </div>
 
-  <div id="set-tab-library" style="display:none">
+  <div id="set-tab-library" style="display:none"><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start">
     <!-- People library -->
-      <div style="margin-bottom:16px">
+      <div class="set-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase">People library <span id="people-count" style="font-weight:400"></span></div>
+          <div class="set-title" style="margin-bottom:0">People library <span id="people-count" style="font-weight:400"></span></div>
           <button class="btn" style="padding:3px 8px;font-size:11px" onclick="showAddPerson()"><i class="ti ti-plus"></i> Add</button>
         </div>
         <div id="add-person-form" style="display:none;background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px;margin-bottom:8px">
@@ -294,38 +301,41 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
             <button class="btn success" onclick="savePerson()"><i class="ti ti-check"></i> Save</button>
           </div>
         </div>
-        <div id="people-list" style="max-height:120px;overflow-y:auto"></div>
+        <div id="people-list" style="max-height:300px;overflow-y:auto"></div>
       </div>
 
       <!-- Tags -->
-      <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px">
+      <div class="set-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase">Position tags <span id="tag-count" style="font-weight:400"></span></div>
+          <div class="set-title" style="margin-bottom:0">Position tags <span id="tag-count" style="font-weight:400"></span></div>
         </div>
-        <div class="field-row two" style="margin-bottom:6px">
-          <div class="pf"><label>Name</label><input type="text" id="tag-name" placeholder="e.g. Ruben Mundo"></div>
-          <div class="pf"><label>Photo URL</label><input type="text" id="tag-photo" placeholder="https://…"></div>
-        </div>
-        <div class="field-row two" style="margin-bottom:6px">
-          <div class="pf"><label>IEM slot</label><select id="tag-iem"><option value="">— none —</option></select></div>
-          <div class="pf"><label>Production position</label>
-            <select id="tag-prod">
-              <option value="">— none —</option>
-              <option value="cg">CG</option><option value="cam">Camera</option>
-              <option value="foh">FOH</option><option value="mon">Monitors</option>
-              <option value="light">Lighting</option><option value="stage">Stage hand</option>
-              <option value="dir">Director</option><option value="stream">Streaming</option>
-            </select>
+        <button class="btn" style="margin-bottom:8px;padding:3px 10px;font-size:11px" onclick="const w=document.getElementById('tag-form-wrap');w.style.display=w.style.display==='none'?'block':'none'"><i class="ti ti-plus"></i> New tag</button>
+        <div id="tag-form-wrap" style="display:none;background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px;margin-bottom:8px">
+          <div class="field-row two" style="margin-bottom:6px">
+            <div class="pf"><label>Name</label><input type="text" id="tag-name" placeholder="e.g. Ruben Mundo"></div>
+            <div class="pf"><label>Photo URL</label><input type="text" id="tag-photo" placeholder="https://…"></div>
           </div>
+          <div class="field-row two" style="margin-bottom:6px">
+            <div class="pf"><label>IEM slot</label><select id="tag-iem"><option value="">— none —</option></select></div>
+            <div class="pf"><label>Production position</label>
+              <select id="tag-prod">
+                <option value="">— none —</option>
+                <option value="cg">CG</option><option value="cam">Camera</option>
+                <option value="foh">FOH</option><option value="mon">Monitors</option>
+                <option value="light">Lighting</option><option value="stage">Stage hand</option>
+                <option value="dir">Director</option><option value="stream">Streaming</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn success" onclick="saveTag()"><i class="ti ti-tag"></i> Save tag</button>
         </div>
-        <button class="btn success" style="margin-bottom:8px" onclick="saveTag()"><i class="ti ti-tag"></i> Save tag</button>
-        <div id="tag-list" style="max-height:100px;overflow-y:auto"></div>
+        <div id="tag-list" style="max-height:300px;overflow-y:auto"></div>
       </div>
 
       <!-- Conflict rules -->
-      <div style="border-top:1px solid var(--border);padding-top:12px">
+      <div class="set-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase">Conflict rules</div>
+          <div class="set-title" style="margin-bottom:0">Conflict rules</div>
           <button class="btn" style="padding:3px 8px;font-size:11px" onclick="showAddRule()"><i class="ti ti-plus"></i> Add</button>
         </div>
         <div id="add-rule-form" style="display:none;background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px;margin-bottom:8px">
@@ -349,14 +359,14 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       </div>
     </div>
 
-  </div>
+  </div></div>
 
   <div id="set-tab-system" style="display:none">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
       <div>
         <!-- Updates -->
       <div style="margin-bottom:20px">
-        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Software update</div>
+        <div class="set-title">Software update</div>
         <div id="version-label" style="font-size:12px;color:var(--text-mid);margin-bottom:10px">Version —</div>
         <!-- Inline update status card -->
         <div id="update-inline" style="display:none;margin-bottom:10px;padding:10px 12px;border-radius:8px;border:1px solid rgba(55,138,221,0.4);background:rgba(55,138,221,0.08)">
@@ -380,8 +390,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
       
         <!-- Export / Import -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Backup &amp; transfer</div>
+      <div class="set-card">
+        <div class="set-title">Backup &amp; transfer</div>
         <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Export all tags, people, rules, and services to transfer to another installation.</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn" onclick="exportData()"><i class="ti ti-download"></i> Export backup</button>
@@ -394,12 +404,10 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       </div>
       <div>
         <!-- Remote access -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Remote access</div>
+      <div class="set-card">
+        <div class="set-title">Remote access</div>
         <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Open these on any device on the same network — everything syncs live. The .local address stays the same even if the IP changes.</div>
         <div id="connect-info" style="font-size:12px;color:var(--text-mid)">Loading…</div>
-      </div>
-
       </div>
     </div>
   </div>
@@ -752,7 +760,7 @@ function loadPositionTemplate(name) {
   else if (name === 'saved') {
     try {
       const saved = JSON.parse(localStorage.getItem('pos-template') || 'null');
-      if (saved) posConfig = saved;
+      if (saved) { posConfig = saved; posConfig._shure = saved.shure || null; }
       else { toast('No saved template found', '#f59e0b'); return; }
     } catch(e) { toast('Could not load template', '#ef4444'); return; }
   }
@@ -763,14 +771,15 @@ function loadPositionTemplate(name) {
 function savePositionTemplate() {
   const name = prompt('Template name:', state.serviceName || 'My template');
   if (!name) return;
-  const tpl = { name, iems: posConfig.iems, prod: posConfig.prod, savedAt: new Date().toISOString() };
+  const tpl = { name, iems: posConfig.iems, prod: posConfig.prod,
+    shure: JSON.parse(JSON.stringify(shureDevs||[])), savedAt: new Date().toISOString() };
   try {
     localStorage.setItem('pos-template', JSON.stringify(tpl));
     document.getElementById('load-saved-tpl-btn').style.display = 'inline-flex';
     document.getElementById('load-saved-tpl-btn').textContent = '';
     document.getElementById('load-saved-tpl-btn').innerHTML = '<i class="ti ti-bookmark"></i> Load "' + name + '"';
     document.getElementById('pos-tpl-result').innerHTML = '<span style="color:#4ade80">✓ Template "' + name + '" saved</span>';
-    toast('<i class="ti ti-bookmark"></i> Template saved: ' + name);
+    toast('<i class="ti ti-bookmark"></i> Template saved with wireless map: ' + name);
   } catch(e) { toast('Could not save template', '#ef4444'); }
 }
 
@@ -780,11 +789,25 @@ function applyPositionConfig() {
   state.mics = posConfig.iems.map((s,i) => ({id:'m'+(i+1),ch:i+1,role:s.role,name:'',photo:'',status:'na',bat:null,type:'Belt pack',freq:''}));
   state.prod = posConfig.prod.map((p,i) => ({id:'p'+(i+1),position:p.position,role:p.role,name:'',photo:'',note:'',status:'active'}));
   render(); push();
-  toast('<i class="ti ti-check"></i> Position configuration applied');
+  // Restore wireless channel bindings snapshotted with the template
+  if (posConfig._shure && posConfig._shure.length) {
+    shureDevs = JSON.parse(JSON.stringify(posConfig._shure));
+    fetch('/api/shure-devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(shureDevs.filter(d=>d.ip))});
+    toast('<i class="ti ti-check"></i> Layout + wireless channel map applied');
+  } else {
+    toast('<i class="ti ti-check"></i> Position configuration applied');
+  }
 }
 
 // ── Shure live battery config ──────────────────────────────────────────────────
 let shureDevs = [];
+(async function initShure(){
+  try {
+    shureDevs = await fetch('/api/shure-devices').then(r=>r.json());
+    shureLive = await fetch('/api/shure-status').then(r=>r.json());
+    setInterval(async()=>{ try{ shureLive = await fetch('/api/shure-status').then(r=>r.json()); }catch(e){} }, 10000);
+  } catch(e) {}
+})();
 async function loadShurePanel() {
   try { shureDevs = await fetch('/api/shure-devices').then(r=>r.json()); } catch(e) { shureDevs = []; }
   renderShureList();
@@ -1248,16 +1271,56 @@ function renderList(type){
   el.innerHTML=html;
 }
 
+function shureChannelOpts(type, ch) {
+  const arr = type==='mic' ? state.mics : state.iems;
+  const slotIndex = arr.findIndex(c=>c.id===ch.id);
+  let opts = '<option value="">— none —</option>';
+  if (!shureDevs.length) return opts + '<option value="" disabled>Add receivers in Settings → Integrations</option>';
+  shureDevs.forEach(d => {
+    [1,2,3,4].forEach(n => {
+      const live = shureLive[d.id]?.channels?.[n];
+      const nm = live?.chanName ? live.chanName : 'Ch '+n;
+      const mapped = (d.channels||[]).find(c=>c.ch===n);
+      const isMine = mapped && mapped.slotType===type && mapped.slotIndex===slotIndex;
+      const taken = mapped && !isMine ? ' (in use)' : '';
+      opts += `<option value="${d.id}:${n}"${isMine?' selected':''}>${d.ip} · ${nm}${taken}</option>`;
+    });
+  });
+  return opts;
+}
+
+async function assignShureChannel(type, id, val) {
+  const arr = type==='mic' ? state.mics : state.iems;
+  const slotIndex = arr.findIndex(c=>c.id===id);
+  if (slotIndex < 0) return;
+  // Remove any mapping currently pointing at this slot
+  shureDevs.forEach(d => { d.channels = (d.channels||[]).filter(c=>!(c.slotType===type && c.slotIndex===slotIndex)); });
+  if (val) {
+    const [devId, chStr] = val.split(':');
+    const n = parseInt(chStr);
+    const dev = shureDevs.find(d=>d.id===devId);
+    if (dev) {
+      dev.channels = (dev.channels||[]).filter(c=>c.ch!==n); // steal from previous slot
+      dev.channels.push({ ch:n, slotType:type, slotIndex });
+    }
+  }
+  const valid = shureDevs.filter(d=>d.ip);
+  await fetch('/api/shure-devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(valid)});
+  toast('<i class="ti ti-antenna"></i> Wireless channel ' + (val?'assigned':'cleared'));
+}
+
 function expandedFields(ch,type){
   let extra='';
   if(type==='mic')extra=`
     <div class="ef"><label>Type</label><select onchange="uf('${type}','${ch.id}','type',this.value)">
       ${['Handheld','Belt pack','Lavalier','Boundary','Headset'].map(t=>`<option${ch.type===t?' selected':''}>${t}</option>`).join('')}
     </select></div>
-    <div class="ef"><label>Freq (MHz)</label><input type="text" value="${ch.freq||''}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>`;
+    <div class="ef"><label>Freq (MHz)</label><input type="text" value="${ch.freq||''}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>
+    <div class="ef"><label>Wireless channel (WWB)</label><select onchange="assignShureChannel('${type}','${ch.id}',this.value)">${shureChannelOpts(type,ch)}</select></div>`;
   else if(type==='iem')extra=`
     <div class="ef"><label>Mix</label><input type="text" value="${ch.mix||''}" onchange="uf('${type}','${ch.id}','mix',this.value)"></div>
-    <div class="ef"><label>Freq (MHz)</label><input type="text" value="${ch.freq||''}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>`;
+    <div class="ef"><label>Freq (MHz)</label><input type="text" value="${ch.freq||''}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>
+    <div class="ef"><label>Wireless channel (WWB)</label><select onchange="assignShureChannel('${type}','${ch.id}',this.value)">${shureChannelOpts(type,ch)}</select></div>`;
   else extra=`
     <div class="ef"><label>Position</label><select onchange="uf('${type}','${ch.id}','position',this.value)">
       ${Object.entries(PROD_POS).map(([k,v])=>`<option value="${k}"${ch.position===k?' selected':''}>${v.label}</option>`).join('')}
