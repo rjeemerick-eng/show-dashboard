@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Show Dashboard — Editor</title>
+<title>RF Assign — Editor</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
@@ -112,7 +112,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 <!-- HEADER -->
 <div class="hdr">
   <div class="hdr-left">
-    <div class="app-title">Show dashboard <span style="font-size:11px;font-weight:400;color:var(--text-dim)">— editor</span></div>
+    <div class="app-title">RF Assign <span style="font-size:11px;font-weight:400;color:var(--text-dim)">— editor</span></div>
     <div class="ws-pill"><div class="ws-dot" id="ws-dot"></div><span id="ws-lbl">Connecting…</span></div>
     <span id="live-svc" style="font-size:11px;color:var(--text-dim)"></span>
   </div>
@@ -267,6 +267,17 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         <div id="import-result" style="margin-top:8px;font-size:11px;color:var(--text-dim)"></div>
       </div>
 
+      <!-- Shure live battery -->
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px">Shure live battery</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Poll ULX-D / QLX-D / Axient Digital receivers on the network for transmitter battery. Battery shows on the board and turns the dot amber when low. (PSM1000 packs have no return channel and can't report battery.)</div>
+        <div id="shure-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="addShureDevice()"><i class="ti ti-plus"></i> Add receiver</button>
+          <button class="btn success" onclick="saveShureDevices()"><i class="ti ti-check"></i> Save &amp; start polling</button>
+        </div>
+      </div>
+
       <!-- Remote access -->
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
         <div style="font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px">Remote access</div>
@@ -394,7 +405,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 <!-- FOOTER -->
 <div class="ftr">
-  <span id="ftr-label">Show dashboard</span>
+  <span id="ftr-label">RF Assign</span>
   <span id="ftr-right" style="color:var(--text-dim)">click any row to edit details</span>
 </div>
 
@@ -588,7 +599,7 @@ function exportPDF() {
   const activeProd = state.prod.filter(p=>p.name).length;
 
   const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>${esc(state.serviceName||'Show Dashboard')}</title>
+  w.document.write(`<!DOCTYPE html><html><head><title>${esc(state.serviceName||'RF Assign')}</title>
   <style>
     :root{--bg:#0a0a0a;--surface:#111;--border:rgba(255,255,255,0.07);--border-mid:rgba(255,255,255,0.13);
       --text:#fff;--text-mid:rgba(255,255,255,0.45);--text-dim:rgba(255,255,255,0.22);--green:#22c55e}
@@ -623,7 +634,7 @@ function exportPDF() {
     .pmrole{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;white-space:nowrap}
   </style></head><body>
   <div class="header">
-    <div><div class="svc-label">Service</div><div class="svc-name">${esc(state.serviceName||'Show Dashboard')}</div></div>
+    <div><div class="svc-label">Service</div><div class="svc-name">${esc(state.serviceName||'RF Assign')}</div></div>
     <div class="stamp">Exported ${new Date().toLocaleString()}</div>
   </div>
   <div class="cols">
@@ -740,6 +751,73 @@ function applyPositionConfig() {
   state.prod = posConfig.prod.map((p,i) => ({id:'p'+(i+1),position:p.position,role:p.role,name:'',photo:'',note:'',status:'active'}));
   render(); push();
   toast('<i class="ti ti-check"></i> Position configuration applied');
+}
+
+// ── Shure live battery config ──────────────────────────────────────────────────
+let shureDevs = [];
+async function loadShurePanel() {
+  try { shureDevs = await fetch('/api/shure-devices').then(r=>r.json()); } catch(e) { shureDevs = []; }
+  renderShureList();
+  refreshShureStatus();
+}
+function slotOpts(sel) {
+  let o = '<option value="">— not mapped —</option>';
+  state.iems.forEach((c,i)=>{ o += `<option value="iem:${i}"${sel==='iem:'+i?' selected':''}>IEM ${i+1} — ${c.role}</option>`; });
+  state.mics.forEach((c,i)=>{ o += `<option value="mic:${i}"${sel==='mic:'+i?' selected':''}>Mic ${i+1} — ${c.role}</option>`; });
+  return o;
+}
+function renderShureList() {
+  const el = document.getElementById('shure-list'); if (!el) return;
+  if (!shureDevs.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">No receivers added.</div>'; return; }
+  el.innerHTML = shureDevs.map((d, di) => {
+    const chRows = [1,2,3,4].map(ch => {
+      const m = (d.channels||[]).find(c=>c.ch===ch);
+      const sel = m ? `${m.slotType}:${m.slotIndex}` : '';
+      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <span style="font-size:10px;color:var(--text-dim);width:34px">Ch ${ch}</span>
+        <select onchange="setShureMap(${di},${ch},this.value)" style="flex:1;padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s3);color:var(--text);font-size:11px;font-family:inherit">${slotOpts(sel)}</select>
+      </div>`;
+    }).join('');
+    return `<div style="background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span id="shure-dot-${d.id}" style="width:7px;height:7px;border-radius:50%;background:#555;flex-shrink:0"></span>
+        <input type="text" value="${d.ip||''}" placeholder="Receiver IP e.g. 192.168.1.50" onchange="shureDevs[${di}].ip=this.value.trim()"
+          style="flex:1;padding:5px 9px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit">
+        <select onchange="shureDevs[${di}].type=this.value" style="padding:5px 8px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s2);color:var(--text);font-size:11px;font-family:inherit">
+          <option value="ulxd"${d.type==='ulxd'?' selected':''}>ULX-D / QLX-D</option>
+          <option value="ad4"${d.type==='ad4'?' selected':''}>Axient Digital</option>
+        </select>
+        <button onclick="shureDevs.splice(${di},1);renderShureList()" style="padding:3px 8px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px">×</button>
+      </div>
+      ${chRows}
+    </div>`;
+  }).join('');
+}
+function setShureMap(di, ch, val) {
+  const d = shureDevs[di];
+  d.channels = (d.channels||[]).filter(c=>c.ch!==ch);
+  if (val) {
+    const [slotType, slotIndex] = val.split(':');
+    d.channels.push({ ch, slotType, slotIndex: parseInt(slotIndex) });
+  }
+}
+function addShureDevice() {
+  shureDevs.push({ id:'shure_'+Date.now(), ip:'', port:2202, type:'ulxd', channels:[] });
+  renderShureList();
+}
+async function saveShureDevices() {
+  const valid = shureDevs.filter(d=>d.ip);
+  const r = await fetch('/api/shure-devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(valid)}).then(r=>r.json());
+  if (r.ok) { toast('<i class="ti ti-antenna"></i> Polling ' + r.count + ' receiver' + (r.count===1?'':'s')); setTimeout(refreshShureStatus, 2500); }
+}
+async function refreshShureStatus() {
+  try {
+    const s = await fetch('/api/shure-status').then(r=>r.json());
+    shureDevs.forEach(d => {
+      const dot = document.getElementById('shure-dot-'+d.id);
+      if (dot && s[d.id]) dot.style.background = s[d.id].ok ? 'var(--green)' : '#ef4444';
+    });
+  } catch(e) {}
 }
 
 async function loadConnectInfo() {
@@ -998,7 +1076,7 @@ async function applyConflictRules() {
 // ── Render ─────────────────────────────────────────────────────────────────────
 function render(){
   if(!state)return;
-  document.getElementById('ftr-label').textContent=state.serviceName||'Show dashboard';
+  document.getElementById('ftr-label').textContent=state.serviceName||'RF Assign';
   document.getElementById('iem-ct').textContent=state.iems.filter(c=>c.status==='active').length+' active';
   document.getElementById('prod-ct').textContent=state.prod.filter(c=>c.status==='active').length+' active';
   renderList('iem');
@@ -1244,7 +1322,7 @@ function togglePanel(id){
   if(id==='playlist-panel'&&document.getElementById('playlist-panel').classList.contains('open'))loadPlaylistUI();
   if(id==='pco-load-panel'&&document.getElementById('pco-load-panel').classList.contains('open'))fetchPCOServices();
   if(id==='settings-panel'&&document.getElementById('settings-panel').classList.contains('open')){
-    checkPCOAuth(); loadTags(); loadPeoplePanel(); loadRulesPanel(); loadSettingsPanel(); renderPositionConfig();
+    checkPCOAuth(); loadTags(); loadPeoplePanel(); loadRulesPanel(); loadSettingsPanel(); renderPositionConfig(); loadShurePanel();
   }
 }
 

@@ -799,6 +799,92 @@ app.post('/api/import', (req, res) => {
   }
 });
 
+// ─── Shure live battery polling (Command Strings, TCP port 2202) ─────────────
+// Works with ULX-D, QLX-D, and Axient Digital receivers. PSM1000 has no
+// return channel, so IEM pack batteries are not network-readable (WWB can't either).
+const net = require('net');
+const SHURE_FILE = path.join(DATA_DIR, 'shure-devices.json');
+let shureDevices = []; // [{id, ip, port, type, channels:[{ch, slotType:'iem'|'mic', slotIndex}]}]
+let shureStatus = {};  // id -> {ok, lastSeen, error}
+
+function loadShureDevices() {
+  try { if (fs.existsSync(SHURE_FILE)) shureDevices = JSON.parse(fs.readFileSync(SHURE_FILE,'utf8')); }
+  catch(e) { console.error('[Shure] Load error:', e.message); }
+}
+function saveShureDevices() {
+  try { fs.writeFileSync(SHURE_FILE, JSON.stringify(shureDevices, null, 2)); } catch(e) {}
+}
+loadShureDevices();
+
+function pollShureDevice(dev) {
+  return new Promise(resolve => {
+    const results = {}; // ch -> bars
+    let buf = '';
+    const sock = new net.Socket();
+    sock.setTimeout(2500);
+    sock.on('data', d => {
+      buf += d.toString();
+      let m;
+      const re = /< REP (\d) BATT_BARS (\d+) >/g;
+      while ((m = re.exec(buf)) !== null) {
+        results[parseInt(m[1])] = results[parseInt(m[1])] || {};
+        results[parseInt(m[1])].bars = parseInt(m[2]);
+      }
+      const rn = /< REP (\d) CHAN_NAME \{(.*?)\} >/g;
+      while ((m = rn.exec(buf)) !== null) {
+        results[parseInt(m[1])] = results[parseInt(m[1])] || {};
+        results[parseInt(m[1])].chanName = m[2].trim();
+      }
+    });
+    sock.on('timeout', () => { sock.destroy(); resolve({ ok:false, error:'timeout', results }); });
+    sock.on('error', err => { resolve({ ok:false, error: err.code || err.message, results }); });
+    sock.on('close', () => resolve({ ok:true, results }));
+    sock.connect(dev.port || 2202, dev.ip, () => {
+      (dev.channels||[]).forEach(c => {
+        sock.write(`< GET ${c.ch} BATT_BARS >`);
+        sock.write(`< GET ${c.ch} CHAN_NAME >`);
+      });
+      setTimeout(() => sock.end(), 1200);
+    });
+  });
+}
+
+async function pollAllShure() {
+  if (!shureDevices.length) return;
+  let changed = false;
+  for (const dev of shureDevices) {
+    const r = await pollShureDevice(dev);
+    shureStatus[dev.id] = { ok: r.ok && Object.keys(r.results).length > 0, lastSeen: r.ok ? Date.now() : (shureStatus[dev.id]?.lastSeen || null), error: r.error || null };
+    (dev.channels||[]).forEach(c => {
+      const res = r.results[c.ch];
+      if (!res) return;
+      const arr = c.slotType === 'mic' ? state.mics : state.iems;
+      const slot = arr && arr[c.slotIndex];
+      if (!slot) return;
+      if (res.bars !== undefined) {
+        const bat = (res.bars === 255) ? null : Math.round(res.bars * 20);
+        if (slot.bat !== bat) { slot.bat = bat; changed = true; }
+      }
+      if (res.chanName !== undefined && slot.wwbName !== res.chanName) {
+        slot.wwbName = res.chanName; changed = true;
+      }
+    });
+  }
+  if (changed) { saveStateSoon(); broadcast({ type: 'state', payload: state }); }
+}
+setInterval(pollAllShure, 5000);
+
+app.get('/api/shure-devices', (req, res) => res.json(shureDevices));
+app.post('/api/shure-devices', (req, res) => {
+  if (!Array.isArray(req.body)) return res.status(400).json({ error: 'array required' });
+  shureDevices = req.body.map((d,i) => ({ id: d.id || 'shure_'+Date.now()+'_'+i, ip: d.ip, port: d.port||2202, type: d.type||'ulxd', channels: d.channels||[] }));
+  saveShureDevices();
+  shureStatus = {};
+  pollAllShure();
+  res.json({ ok: true, count: shureDevices.length });
+});
+app.get('/api/shure-status', (req, res) => res.json(shureStatus));
+
 // Connection info for remote access (stable .local hostname + LAN IPs)
 app.get('/api/connect-info', (req, res) => {
   const os = require('os');

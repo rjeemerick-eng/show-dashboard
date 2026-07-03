@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Show Dashboard — Display</title>
+<title>RF Assign — Display</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -56,10 +56,18 @@ html, body {
   border-bottom: 1px solid var(--border);
   flex: 1; min-height: 0; transition: opacity 0.2s;
 }
-.iem-row { grid-template-columns: 36px 44px 1fr 1fr; gap: 0 10px; }
+.iem-row { grid-template-columns: 44px 44px 1fr 1fr 92px; gap: 0 10px; }
 .person-row.na { opacity: 0.2; }
 
 .pack-num { font-size: 11px; font-weight: 900; color: var(--text-dim); font-variant-numeric: tabular-nums; letter-spacing: 0.05em; }
+.wwb-name { font-size: 8px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-dim); text-transform: uppercase; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bat { display: flex; align-items: center; gap: 6px; justify-content: flex-end; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bat-body { width: 34px; height: 12px; border: 1.5px solid rgba(255,255,255,0.35); border-radius: 3px; padding: 1.5px; display: inline-block; position: relative; }
+.bat-body::after { content: ''; position: absolute; right: -4px; top: 3px; width: 2.5px; height: 6px; background: rgba(255,255,255,0.35); border-radius: 1px; }
+.bat-fill { display: block; height: 100%; border-radius: 1.5px; }
+.bat-green { color: #22c55e; } .bat-green .bat-fill { background: #22c55e; }
+.bat-amber { color: #f59e0b; } .bat-amber .bat-fill { background: #f59e0b; }
+.bat-red { color: #ef4444; } .bat-red .bat-fill { background: #ef4444; }
 .avatar-circle {
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
   font-weight: 900; color: #fff; text-transform: uppercase; flex-shrink: 0; overflow: hidden;
@@ -166,7 +174,7 @@ html, body {
   </div>
 
   <div class="footer">
-    <span class="footer-left" id="footer-stats">Show dashboard</span>
+    <span class="footer-left" id="footer-stats">RF Assign</span>
     <div class="footer-right">
       <div class="ws-dot" id="ws-dot"></div>
       <span id="ws-lbl">Connecting…</span>
@@ -210,11 +218,15 @@ function makeIemRow(ch){
   const avatarEl=hasName
     ?`<div class="avatar-circle" style="background:${col};width:36px;height:36px;font-size:11px">${av}</div>`
     :`<div style="width:36px;height:36px;flex-shrink:0"></div>`;
+  const batEl = (ch.bat!==null&&ch.bat!==undefined)
+    ? `<div class="bat ${ch.bat<20?'bat-red':ch.bat<40?'bat-amber':'bat-green'}"><span class="bat-body"><span class="bat-fill" style="width:${Math.max(6,ch.bat)}%"></span></span>${ch.bat}%</div>`
+    : `<div></div>`;
   return `<div class="person-row iem-row${on?'':' na'}">
-    <div class="pack-num">${ch.ch}</div>
+    <div class="pack-num">${ch.wwbName?`<div>${ch.ch}</div><div class="wwb-name">${ch.wwbName}</div>`:ch.ch}</div>
     ${avatarEl}
     <div class="cell-name" style="color:var(--text);font-weight:900">${ch.name||'—'}</div>
     <div class="cell-role" style="color:var(--text-mid);font-weight:700"><div class="s-dot ${dotCls}"></div>${ch.role}</div>
+    ${batEl}
   </div>`;
 }
 
