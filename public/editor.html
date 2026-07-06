@@ -502,6 +502,7 @@ let idCtr=200;
 let playlistData=[], activeServiceId=null;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function initials(n){if(!n||!n.trim())return'?';const p=n.trim().split(' ');return p.length>1?(p[0][0]+p[p.length-1][0]).toUpperCase():p[0].slice(0,2).toUpperCase()}
 function colorFor(n){let h=0;for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h);return COLORS[Math.abs(h)%COLORS.length]}
 function arrFor(t){return t==='mic'?state.mics:t==='iem'?state.iems:state.prod}
@@ -533,7 +534,7 @@ function connect(){
     }
     if(msg.type==='playlist')handlePlaylist(msg.payload);
     if(msg.type==='went_live'){
-      toast(`<i class="ti ti-broadcast"></i> Now live: ${msg.payload.name}`);
+      toast(`<i class="ti ti-broadcast"></i> Now live: ${esc(msg.payload.name)}`);
       // Clear PCO pool when switching services — dropdowns will repopulate from tags only
       stagingPool = [];
       poolSource='tags';
@@ -611,12 +612,12 @@ async function confirmQuickAdd() {
     if (pa.kind === 'slot') assignSlot(pa.ref.type, pa.ref.id, name);
     else assignProd(pa.ref.id, name);
   }
-  toast('<i class="ti ti-user-plus"></i> ' + name + ' added to people library');
+  toast('<i class="ti ti-user-plus"></i> ' + esc(name) + ' added to people library');
 }
 
 // ── Export live dashboard as PDF (replica of the display board) ────────────────
 function exportPDF() {
-  const esc = s => String(s||'').replace(/</g,'&lt;');
+  // uses the global esc() — full attribute-safe escaping
   const PDF_PROD_POS = {
     cg:{label:'CG',color:'#7F77DD'}, cam:{label:'Camera',color:'#1D9E75'},
     foh:{label:'FOH',color:'#D85A30'}, mon:{label:'Monitors',color:'#378ADD'},
@@ -626,7 +627,7 @@ function exportPDF() {
   const av = (name, photo, size) => {
     if (!name) return `<div style="width:${size}px;height:${size}px"></div>`;
     if (photo) return `<div class="avc" style="width:${size}px;height:${size}px"><img src="${esc(photo)}"></div>`;
-    return `<div class="avc" style="width:${size}px;height:${size}px;background:${colorFor(name)};font-size:${Math.round(size*0.38)}px">${initials(name)}</div>`;
+    return `<div class="avc" style="width:${size}px;height:${size}px;background:${colorFor(name)};font-size:${Math.round(size*0.38)}px">${esc(initials(name))}</div>`;
   };
 
   // IEM rows — mirror the board: all rows, unassigned dimmed
@@ -742,7 +743,7 @@ function renderPositionConfig() {
     const btn = document.getElementById('load-saved-tpl-btn');
     if (saved && btn) {
       btn.style.display = 'inline-flex';
-      btn.innerHTML = '<i class="ti ti-bookmark"></i> Load "' + saved.name + '"';
+      btn.innerHTML = '<i class="ti ti-bookmark"></i> Load "' + esc(saved.name) + '"';
     }
   } catch(e) {}
 }
@@ -752,7 +753,7 @@ function renderIemConfig() {
   el.innerHTML = posConfig.iems.map((s, i) => `
     <div style="display:flex;align-items:center;gap:6px">
       <span style="font-size:11px;color:var(--text-dim);width:20px;text-align:right">${i+1}</span>
-      <input type="text" value="${s.role}" onchange="posConfig.iems[${i}].role=this.value"
+      <input type="text" value="${esc(s.role)}" onchange="posConfig.iems[${i}].role=this.value"
         style="flex:1;padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s3);color:var(--text);font-size:12px;font-family:inherit">
       <button onclick="posConfig.iems.splice(${i},1);renderIemConfig()" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px">×</button>
     </div>`).join('');
@@ -767,7 +768,7 @@ function renderProdConfig() {
         style="padding:4px 6px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s3);color:var(--text);font-size:11px;font-family:inherit;width:90px">
         ${Object.entries(PROD_OPTS).map(([k,v])=>`<option value="${k}"${p.position===k?' selected':''}>${v}</option>`).join('')}
       </select>
-      <input type="text" value="${p.role}" onchange="posConfig.prod[${i}].role=this.value"
+      <input type="text" value="${esc(p.role)}" onchange="posConfig.prod[${i}].role=this.value"
         style="flex:1;padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s3);color:var(--text);font-size:12px;font-family:inherit">
       <button onclick="posConfig.prod.splice(${i},1);renderProdConfig()" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px">×</button>
     </div>`).join('');
@@ -798,9 +799,9 @@ function savePositionTemplate() {
     localStorage.setItem('pos-template', JSON.stringify(tpl));
     document.getElementById('load-saved-tpl-btn').style.display = 'inline-flex';
     document.getElementById('load-saved-tpl-btn').textContent = '';
-    document.getElementById('load-saved-tpl-btn').innerHTML = '<i class="ti ti-bookmark"></i> Load "' + name + '"';
-    document.getElementById('pos-tpl-result').innerHTML = '<span style="color:#4ade80">✓ Template "' + name + '" saved</span>';
-    toast('<i class="ti ti-bookmark"></i> Template saved with wireless map: ' + name);
+    document.getElementById('load-saved-tpl-btn').innerHTML = '<i class="ti ti-bookmark"></i> Load "' + esc(name) + '"';
+    document.getElementById('pos-tpl-result').innerHTML = '<span style="color:#4ade80">✓ Template "' + esc(name) + '" saved</span>';
+    toast('<i class="ti ti-bookmark"></i> Template saved with wireless map: ' + esc(name));
   } catch(e) { toast('Could not save template', '#ef4444'); }
 }
 
@@ -836,8 +837,8 @@ async function loadShurePanel() {
 }
 function slotOpts(sel) {
   let o = '<option value="">— not mapped —</option>';
-  state.iems.forEach((c,i)=>{ o += `<option value="iem:${i}"${sel==='iem:'+i?' selected':''}>IEM ${i+1} — ${c.role}</option>`; });
-  state.mics.forEach((c,i)=>{ o += `<option value="mic:${i}"${sel==='mic:'+i?' selected':''}>Mic ${i+1} — ${c.role}</option>`; });
+  state.iems.forEach((c,i)=>{ o += `<option value="iem:${i}"${sel==='iem:'+i?' selected':''}>IEM ${i+1} — ${esc(c.role)}</option>`; });
+  state.mics.forEach((c,i)=>{ o += `<option value="mic:${i}"${sel==='mic:'+i?' selected':''}>Mic ${i+1} — ${esc(c.role)}</option>`; });
   return o;
 }
 let shureLive = {};
@@ -849,7 +850,7 @@ function renderShureList() {
       const m = (d.channels||[]).find(c=>c.ch===ch);
       const sel = m ? `${m.slotType}:${m.slotIndex}` : '';
       const live = shureLive[d.id]?.channels?.[ch];
-      const label = live?.chanName ? `<strong style="color:var(--text)">${live.chanName}</strong>` : 'Ch '+ch;
+      const label = live?.chanName ? `<strong style="color:var(--text)">${esc(live.chanName)}</strong>` : 'Ch '+ch;
       return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
         <span style="font-size:10px;color:var(--text-dim);width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Ch ${ch}">${label}</span>
         <select onchange="setShureMap(${di},${ch},this.value)" style="flex:1;padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s3);color:var(--text);font-size:11px;font-family:inherit">${slotOpts(sel)}</select>
@@ -858,7 +859,7 @@ function renderShureList() {
     return `<div style="background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <span id="shure-dot-${d.id}" style="width:7px;height:7px;border-radius:50%;background:#555;flex-shrink:0"></span>
-        <input type="text" value="${d.ip||''}" placeholder="Receiver IP e.g. 192.168.1.50" onchange="shureDevs[${di}].ip=this.value.trim()"
+        <input type="text" value="${esc(d.ip||'')}" placeholder="Receiver IP e.g. 192.168.1.50" onchange="shureDevs[${di}].ip=this.value.trim()"
           style="flex:1;padding:5px 9px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit">
         <select onchange="shureDevs[${di}].type=this.value" style="padding:5px 8px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s2);color:var(--text);font-size:11px;font-family:inherit">
           <option value="ulxd"${d.type==='ulxd'?' selected':''}>ULX-D / QLX-D</option>
@@ -911,13 +912,13 @@ async function loadConnectInfo() {
         <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">${label}</div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
           <span style="font-size:10px;color:var(--text-dim);width:44px">Editor</span>
-          <code style="flex:1;padding:5px 9px;background:var(--s3);border:1px solid var(--border-mid);border-radius:6px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${base}/edit</code>
-          <button class="btn" style="padding:3px 9px;font-size:11px" onclick="navigator.clipboard.writeText('${base}/edit');toast('Copied')">Copy</button>
+          <code style="flex:1;padding:5px 9px;background:var(--s3);border:1px solid var(--border-mid);border-radius:6px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(base)}/edit</code>
+          <button class="btn" style="padding:3px 9px;font-size:11px" data-copy="${esc(base)}/edit" onclick="navigator.clipboard.writeText(this.dataset.copy);toast('Copied')">Copy</button>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:10px;color:var(--text-dim);width:44px">Board</span>
-          <code style="flex:1;padding:5px 9px;background:var(--s3);border:1px solid var(--border-mid);border-radius:6px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${base}/display</code>
-          <button class="btn" style="padding:3px 9px;font-size:11px" onclick="navigator.clipboard.writeText('${base}/display');toast('Copied')">Copy</button>
+          <code style="flex:1;padding:5px 9px;background:var(--s3);border:1px solid var(--border-mid);border-radius:6px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(base)}/display</code>
+          <button class="btn" style="padding:3px 9px;font-size:11px" data-copy="${esc(base)}/display" onclick="navigator.clipboard.writeText(this.dataset.copy);toast('Copied')">Copy</button>
         </div>
       </div>`;
     let out = row(`http://${info.hostname}:${info.port}`, 'Stable address (recommended)');
@@ -971,10 +972,10 @@ async function importData(input) {
       loadTags();
       toast('<i class="ti ti-check"></i> Data imported successfully');
     } else {
-      result.innerHTML = `<span style="color:#ef4444">Error: ${r.error}</span>`;
+      result.innerHTML = `<span style="color:#ef4444">Error: ${esc(r.error)}</span>`;
     }
   } catch(e) {
-    result.innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
+    result.innerHTML = `<span style="color:#ef4444">Error: ${esc(e.message)}</span>`;
   }
   input.value = '';
 }
@@ -1014,7 +1015,7 @@ async function loadPeoplePanel() {
   const sel = document.getElementById('pp-iem');
   if (sel && state) {
     sel.innerHTML = '<option value="">— none —</option>' +
-      state.iems.map((c,i) => `<option value="${i}">${c.ch} — ${c.role}</option>`).join('');
+      state.iems.map((c,i) => `<option value="${i}">${c.ch} — ${esc(c.role)}</option>`).join('');
   }
 }
 
@@ -1027,8 +1028,8 @@ function renderPeopleList() {
   el.innerHTML = peopleLibrary.map(p => {
     const col = colorFor(p.name);
     const av = p.photo
-      ? `<img src="${p.photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'">`
-      : `<div style="width:32px;height:32px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">${initials(p.name)}</div>`;
+      ? `<img src="${esc(p.photo)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'">`
+      : `<div style="width:32px;height:32px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">${esc(initials(p.name))}</div>`;
     const slots = [
       p.defaultIemSlot !== null && p.defaultIemSlot !== undefined ? `IEM ${Number(p.defaultIemSlot)+1}` : null,
       p.defaultProdPosition ? PROD_LABELS[p.defaultProdPosition] : null
@@ -1036,7 +1037,7 @@ function renderPeopleList() {
     return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
       ${av}
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600">${p.name}</div>
+        <div style="font-size:13px;font-weight:600">${esc(p.name)}</div>
         <div style="font-size:11px;color:var(--text-dim)">${slots||'No default slot'}</div>
       </div>
       <div style="display:flex;gap:5px">
@@ -1074,7 +1075,7 @@ async function savePerson() {
   document.getElementById('add-person-form').style.display = 'none';
   savedTags = await fetch('/api/tags').then(r => r.json());
   await loadPeoplePanel();
-  toast(`<i class="ti ti-check"></i> ${name} saved to library`);
+  toast(`<i class="ti ti-check"></i> ${esc(name)} saved to library`);
   preloadTagsPool();
 }
 
@@ -1096,7 +1097,7 @@ async function loadRulesPanel() {
 
 function populateRulePeopleDropdowns() {
   const allNames = [...new Set([...Object.keys(savedTags), ...peopleLibrary.map(p => p.name)])].sort();
-  const opts = '<option value="">select person…</option>' + allNames.map(n => `<option value="${n}">${n}</option>`).join('');
+  const opts = '<option value="">select person…</option>' + allNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
   ['rule-if-person','rule-then-person'].forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=opts; });
 }
 
@@ -1105,7 +1106,7 @@ function updateRuleSlots() {
   if (!typeEl || !state) return;
   const arr = typeEl.value === 'iem' ? state.iems : typeEl.value === 'mic' ? state.mics : state.prod;
   const sel = document.getElementById('rule-then-slot');
-  if (sel) sel.innerHTML = arr.map((s,i) => `<option value="${i}">${i+1} — ${s.role||s.position||''}</option>`).join('');
+  if (sel) sel.innerHTML = arr.map((s,i) => `<option value="${i}">${i+1} — ${esc(s.role||s.position||'')}</option>`).join('');
 }
 
 function showAddRule() {
@@ -1134,7 +1135,7 @@ function renderRulesList() {
   el.innerHTML = rulesData.map(r => `
     <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border:1px solid var(--border-mid);background:var(--s3)">
       <i class="ti ti-git-branch" style="color:var(--amber);font-size:14px;flex-shrink:0"></i>
-      <div style="flex:1;font-size:12px">${r.label||r.ifPerson+' → '+r.thenPerson}</div>
+      <div style="flex:1;font-size:12px">${esc(r.label||r.ifPerson+' → '+r.thenPerson)}</div>
       <button onclick="deleteRule('${r.id}')" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px"><i class="ti ti-trash"></i></button>
     </div>`).join('');
 }
@@ -1148,7 +1149,7 @@ async function applyConflictRules() {
     state = result.state; render(); push();
     const banner = document.createElement('div');
     banner.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--s2);border:1px solid rgba(245,158,11,0.5);color:#fbbf24;padding:12px 20px;border-radius:10px;font-size:12px;z-index:9999;max-width:500px';
-    banner.innerHTML = `<div style="font-weight:600;margin-bottom:6px"><i class="ti ti-git-branch"></i> ${result.changes.length} rule${result.changes.length>1?'s':''} applied</div>` + result.changes.map(c=>`<div style="font-size:11px;opacity:0.8">• ${c}</div>`).join('');
+    banner.innerHTML = `<div style="font-weight:600;margin-bottom:6px"><i class="ti ti-git-branch"></i> ${result.changes.length} rule${result.changes.length>1?'s':''} applied</div>` + result.changes.map(c=>`<div style="font-size:11px;opacity:0.8">• ${esc(c)}</div>`).join('');
     document.body.appendChild(banner);
     setTimeout(()=>banner.remove(), 6000);
   }
@@ -1164,7 +1165,7 @@ function render(){
   renderList('prod');
   // Refresh tag IEM dropdown
   const sel=document.getElementById('tag-iem');
-  if(sel)sel.innerHTML='<option value="">— none —</option>'+state.iems.map((c,i)=>`<option value="${i}">${c.ch} — ${c.role}</option>`).join('');
+  if(sel)sel.innerHTML='<option value="">— none —</option>'+state.iems.map((c,i)=>`<option value="${i}">${c.ch} — ${esc(c.role)}</option>`).join('');
   // Rebuild datalist from pool + tags + current state names
   const dl=document.getElementById('pool-list');
   if(dl){
@@ -1183,8 +1184,8 @@ function render(){
 function avatar(name,photo,size=32){
   if(!name||!name.trim()) return `<div style="width:${size}px;height:${size}px;flex-shrink:0"></div>`;
   const col=colorFor(name);
-  if(photo)return`<div class="row-avatar" style="width:${size}px;height:${size}px;background:${col}"><img src="${photo}" onerror="this.style.display='none'"></div>`;
-  return`<div class="row-avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.34)}px;background:${col}">${initials(name)}</div>`;
+  if(photo)return`<div class="row-avatar" style="width:${size}px;height:${size}px;background:${col}"><img src="${esc(photo)}" onerror="this.style.display='none'"></div>`;
+  return`<div class="row-avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.34)}px;background:${col}">${esc(initials(name))}</div>`;
 }
 
 function poolOptions(assigned, slotType='iem'){
@@ -1221,7 +1222,7 @@ function poolOptions(assigned, slotType='iem'){
     return hasIem || (!hasIem && !hasProd);
   });
 
-  return filtered.map(p=>`<option value="${p.name}"${p.name===assigned?' selected':''}>${p.name}</option>`).join('')
+  return filtered.map(p=>`<option value="${esc(p.name)}"${p.name===assigned?' selected':''}>${esc(p.name)}</option>`).join('')
     + '<option value="__add__">＋ Add new person…</option>';
 }
 
@@ -1248,7 +1249,7 @@ function renderList(type){
         html+=`<div class="assign-row prod-row-grid" onclick="toggleExpand('prod','${p.id}')" style="cursor:pointer;${p.hidden?'opacity:0.35':''}">
           ${avatar(p.name,p.photo,32)}
           <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
-            <div style="font-size:11px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.role}</div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.role)}</div>
             <select class="row-select${p.name?' filled':''}"
               onclick="event.stopPropagation()"
               onchange="assignProd('${p.id}',this.value)"
@@ -1272,7 +1273,7 @@ function renderList(type){
       const tagIcon=savedTags[ch.name]?'tagged':'';
       html+=`<div class="assign-row ${type==='iem'?'iem-row':'mic-row'}" onclick="toggleExpand('${type}','${ch.id}')" style="cursor:pointer">
         <div class="row-ch">${ch.ch}</div>
-        <div class="row-role">${ch.role}</div>
+        <div class="row-role">${esc(ch.role)}</div>
         ${avatar(ch.name,ch.photo,30)}
         <div style="display:flex;gap:4px;align-items:center" onclick="event.stopPropagation()">
           <select class="row-select${ch.name?' filled':''}"
@@ -1304,7 +1305,7 @@ function shureChannelOpts(type, ch) {
       const mapped = (d.channels||[]).find(c=>c.ch===n);
       const isMine = mapped && mapped.slotType===type && mapped.slotIndex===slotIndex;
       const taken = mapped && !isMine ? ' (in use)' : '';
-      opts += `<option value="${d.id}:${n}"${isMine?' selected':''}>${d.ip} · ${nm}${taken}</option>`;
+      opts += `<option value="${esc(d.id)}:${n}"${isMine?' selected':''}>${esc(d.ip)} · ${esc(nm)}${taken}</option>`;
     });
   });
   return opts;
@@ -1336,27 +1337,27 @@ function expandedFields(ch,type){
     <div class="ef"><label>Type</label><select onchange="uf('${type}','${ch.id}','type',this.value)">
       ${['Handheld','Belt pack','Lavalier','Boundary','Headset'].map(t=>`<option${ch.type===t?' selected':''}>${t}</option>`).join('')}
     </select></div>
-    <div class="ef"><label>Freq (MHz)</label><input type="text" value="${ch.freq||''}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>
+    <div class="ef"><label>Freq (MHz)</label><input type="text" value="${esc(ch.freq||'')}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>
     <div class="ef"><label>Wireless channel (WWB)</label><select onchange="assignShureChannel('${type}','${ch.id}',this.value)">${shureChannelOpts(type,ch)}</select></div>`;
   else if(type==='iem')extra=`
-    <div class="ef"><label>Mix</label><input type="text" value="${ch.mix||''}" onchange="uf('${type}','${ch.id}','mix',this.value)"></div>
-    <div class="ef"><label>Freq (MHz)</label><input type="text" value="${ch.freq||''}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>
+    <div class="ef"><label>Mix</label><input type="text" value="${esc(ch.mix||'')}" onchange="uf('${type}','${ch.id}','mix',this.value)"></div>
+    <div class="ef"><label>Freq (MHz)</label><input type="text" value="${esc(ch.freq||'')}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>
     <div class="ef"><label>Wireless channel (WWB)</label><select onchange="assignShureChannel('${type}','${ch.id}',this.value)">${shureChannelOpts(type,ch)}</select></div>`;
   else extra=`
     <div class="ef"><label>Position</label><select onchange="uf('${type}','${ch.id}','position',this.value)">
       ${Object.entries(PROD_POS).map(([k,v])=>`<option value="${k}"${ch.position===k?' selected':''}>${v.label}</option>`).join('')}
     </select></div>
-    <div class="ef"><label>Note</label><input type="text" value="${ch.note||''}" onchange="uf('${type}','${ch.id}','note',this.value)"></div>`;
+    <div class="ef"><label>Note</label><input type="text" value="${esc(ch.note||'')}" onchange="uf('${type}','${ch.id}','note',this.value)"></div>`;
   return `<div class="edit-row">
     <div class="edit-row-fields">
-      <div class="ef"><label>Name</label><input type="text" value="${ch.name||''}" onchange="uf('${type}','${ch.id}','name',this.value)"></div>
-      <div class="ef"><label>Role label</label><input type="text" value="${ch.role||''}" onchange="uf('${type}','${ch.id}','role',this.value)"></div>
+      <div class="ef"><label>Name</label><input type="text" value="${esc(ch.name||'')}" onchange="uf('${type}','${ch.id}','name',this.value)"></div>
+      <div class="ef"><label>Role label</label><input type="text" value="${esc(ch.role||'')}" onchange="uf('${type}','${ch.id}','role',this.value)"></div>
       ${extra}
       <div class="ef"><label>Status</label><select onchange="uf('${type}','${ch.id}','status',this.value)">
         <option value="active"${ch.status==='active'?' selected':''}>Active</option>
         <option value="na"${ch.status==='na'?' selected':''}>N/A</option>
       </select></div>
-      <div class="ef"><label>Photo URL</label><input type="text" value="${ch.photo||''}" placeholder="https://…" oninput="uf('${type}','${ch.id}','photo',this.value)"></div>
+      <div class="ef"><label>Photo URL</label><input type="text" value="${esc(ch.photo||'')}" placeholder="https://…" oninput="uf('${type}','${ch.id}','photo',this.value)"></div>
       ${type==='prod'?`<div class="ef"><label>Show on display</label><select onchange="uf('${type}','${ch.id}','hidden',this.value==='1')">
         <option value="0"${!ch.hidden?' selected':''}>Visible</option>
         <option value="1"${ch.hidden?' selected':''}>Hidden</option>
@@ -1518,7 +1519,7 @@ async function fetchPCOServices(){
   try{
     const d=await fetch('/api/pco/services/v2/service_types?per_page=25').then(r=>r.json());
     const sel=document.getElementById('pco-svc-type');
-    sel.innerHTML='<option value="">Select…</option>'+(d.data||[]).map(t=>`<option value="${t.id}">${t.attributes.name}</option>`).join('');
+    sel.innerHTML='<option value="">Select…</option>'+(d.data||[]).map(t=>`<option value="${esc(t.id)}">${esc(t.attributes.name)}</option>`).join('');
   }catch(e){}
 }
 
@@ -1530,7 +1531,7 @@ async function fetchUpcomingForType(){
   try{
     const d=await fetch(`/api/pco/services/v2/service_types/${typeId}/plans?filter=future&per_page=8&order=sort_date`).then(r=>r.json());
     const plans=d.data||[];
-    planSel.innerHTML='<option value="">Select plan…</option>'+plans.map(p=>`<option value="${p.id}">${p.attributes.dates||p.attributes.title||p.id}</option>`).join('');
+    planSel.innerHTML='<option value="">Select plan…</option>'+plans.map(p=>`<option value="${esc(p.id)}">${esc(p.attributes.dates||p.attributes.title||p.id)}</option>`).join('');
   }catch(e){planSel.innerHTML='<option>Error</option>'}
 }
 
@@ -1605,7 +1606,7 @@ async function loadRoster(isRefresh=false){
       const newPeople=freshPool.filter(p=>!existing.has(p.name)&&!used.has(p.name));
       stagingPool.push(...newPeople);
       status.innerHTML=newPeople.length
-        ?`<span style="color:#4ade80">${newPeople.length} new: ${newPeople.map(p=>p.name).join(', ')}</span>`
+        ?`<span style="color:#4ade80">${newPeople.length} new: ${esc(newPeople.map(p=>p.name).join(', '))}</span>`
         :`<span style="color:var(--text-dim)">No new people</span>`;
       render();return;
     }
@@ -1655,7 +1656,7 @@ async function quickTag(type,id){
   const tag={name:ch.name,iemSlot:type!=='prod'?idx:null,micSlot:type!=='prod'?idx:null,prodPosition:type==='prod'?ch.position:null,photo:ch.photo||null};
   await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(tag)});
   savedTags[ch.name]=tag;
-  toast(`<i class="ti ti-tag"></i> ${ch.name} tagged`);
+  toast(`<i class="ti ti-tag"></i> ${esc(ch.name)} tagged`);
   render();
 }
 
@@ -1676,16 +1677,16 @@ function renderTagList(){
       const iemLbl=t.iemSlot!=null?`IEM ${Number(t.iemSlot)+1} — ${state?.iems[t.iemSlot]?.role||''}`:null;
       const prodLbl=t.prodPosition?PROD_LABELS[t.prodPosition]:null;
       const col=colorFor(name);
-      const av=t.photo?`<img src="${t.photo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover">`
-        :`<div style="width:28px;height:28px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff">${initials(name)}</div>`;
+      const av=t.photo?`<img src="${esc(t.photo)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover">`
+        :`<div style="width:28px;height:28px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff">${esc(initials(name))}</div>`;
       return`<div class="tag-row">
         ${av}
         <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600">${name}</div>
-          <div style="font-size:10px;color:var(--text-dim)">${[iemLbl&&'📻 '+iemLbl,prodLbl&&'🎬 '+prodLbl].filter(Boolean).join(' · ')||'No slot set'}</div>
+          <div style="font-size:12px;font-weight:600">${esc(name)}</div>
+          <div style="font-size:10px;color:var(--text-dim)">${esc([iemLbl&&'📻 '+iemLbl,prodLbl&&'🎬 '+prodLbl].filter(Boolean).join(' · ')||'No slot set')}</div>
         </div>
-        <button onclick="editTagLoad('${name.replace(/'/g,"\\'")}')" style="padding:3px 7px;border-radius:5px;border:1px solid var(--border-mid);background:none;color:var(--text-mid);cursor:pointer;font-size:11px"><i class="ti ti-edit"></i></button>
-        <button onclick="deleteTagNow('${name.replace(/'/g,"\\'")}')" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px"><i class="ti ti-trash"></i></button>
+        <button data-name="${esc(name)}" onclick="editTagLoad(this.dataset.name)" style="padding:3px 7px;border-radius:5px;border:1px solid var(--border-mid);background:none;color:var(--text-mid);cursor:pointer;font-size:11px"><i class="ti ti-edit"></i></button>
+        <button data-name="${esc(name)}" onclick="deleteTagNow(this.dataset.name)" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px"><i class="ti ti-trash"></i></button>
       </div>`;
     }).join('');
 }
@@ -1746,14 +1747,14 @@ function renderPlaylistUI(){
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
           ${isLive?'<span style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block"></span>':''}
-          <span contenteditable="true" onblur="renameService('${svc.id}',this.innerText)" style="outline:none">${svc.name}</span>
+          <span contenteditable="true" onblur="renameService('${svc.id}',this.innerText)" style="outline:none">${esc(svc.name)}</span>
         </div>
         <div style="font-size:11px;color:var(--text-dim);margin-top:1px">${date}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
-        <button class="btn" style="padding:4px 10px;font-size:11px" onclick="previewSvc('${svc.id}','${svc.name.replace(/'/g,"\\'")}')" title="Load into editor"><i class="ti ti-eye"></i></button>
+        <button class="btn" style="padding:4px 10px;font-size:11px" onclick="previewSvc('${svc.id}')" title="Load into editor"><i class="ti ti-eye"></i></button>
         <button class="btn" style="padding:4px 10px;font-size:11px" onclick="updateSvc('${svc.id}')" title="Overwrite with current"><i class="ti ti-refresh"></i></button>
-        ${!isLive?`<button class="btn success" style="padding:4px 10px;font-size:11px" onclick="confirmGoLive('${svc.id}','${svc.name.replace(/'/g,"\\'")}')"><i class="ti ti-broadcast"></i></button>`
+        ${!isLive?`<button class="btn success" style="padding:4px 10px;font-size:11px" onclick="confirmGoLive('${svc.id}')"><i class="ti ti-broadcast"></i></button>`
           :`<span style="font-size:10px;color:#4ade80;font-weight:700;padding:4px 6px">LIVE</span>`}
         <button class="btn danger" style="padding:4px 8px;font-size:11px" onclick="deleteSvc('${svc.id}')"><i class="ti ti-trash"></i></button>
       </div>
@@ -1802,7 +1803,7 @@ async function newBlankService(name){
   await fetch(`/api/playlist/${id}/go-live`, { method: 'POST' });
   stagingPool = [];
   await loadPlaylistUI();
-  toast('<i class="ti ti-plus"></i> New blank: ' + name);
+  toast('<i class="ti ti-plus"></i> New blank: ' + esc(name));
 }
 
 async function saveAsService(name){
@@ -1813,19 +1814,21 @@ async function saveAsService(name){
   if (d.id) {
     await loadPlaylistUI();
     renderPlaylistUI();
-    toast('<i class="ti ti-check"></i> Saved: ' + name);
+    toast('<i class="ti ti-check"></i> Saved: ' + esc(name));
   } else {
     toast('Error saving service', '#ef4444');
   }
 }
 async function renameService(id,name){if(!name.trim())return;await fetch(`/api/playlist/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim()})})}
 async function updateSvc(id){if(!confirm('Overwrite with current plot?'))return;await fetch(`/api/playlist/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({saveCurrentState:true})});toast('Updated');loadPlaylistUI()}
-async function previewSvc(id,name){
+async function previewSvc(id){
+  const name=(playlistData.find(s=>s.id===id)||{}).name||'';
   const s=await fetch(`/api/playlist/${id}/preview`).then(r=>r.json());
   state=s;render();push();
-  toast(`<i class="ti ti-eye"></i> Previewing: ${name}`,'#7eb8f5');
+  toast(`<i class="ti ti-eye"></i> Previewing: ${esc(name)}`,'#7eb8f5');
 }
-function confirmGoLive(id,name){
+function confirmGoLive(id){
+  const name=(playlistData.find(s=>s.id===id)||{}).name||'';
   document.getElementById('go-live-name').textContent=name;
   document.getElementById('go-live-confirm').style.display='block';
   document.getElementById('go-live-btn').onclick=()=>goLive(id);
