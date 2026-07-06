@@ -93,7 +93,10 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.checkForUpdates();
-  setInterval(function() { autoUpdater.checkForUpdates(); }, 60 * 1000);
+  // Hourly, not every 60s — GitHub rate-limits unauthenticated requests and a
+  // once-a-minute check trips it, surfacing as "Error checking for updates".
+  setInterval(function() { autoUpdater.checkForUpdates(); }, 60 * 60 * 1000);
+  var updateDownloaded = false;
   setInterval(function() {
     if (global.triggerUpdateCheck) {
       global.triggerUpdateCheck = false;
@@ -101,10 +104,25 @@ function setupAutoUpdater() {
     }
     if (global.triggerInstall) {
       global.triggerInstall = false;
-      console.log('[Updater] Installing update now...');
-      autoUpdater.quitAndInstall();
+      if (updateDownloaded) {
+        console.log('[Updater] Installing update now...');
+        // A throw here (e.g. verification failed) would otherwise crash the
+        // main process mid-service.
+        try { autoUpdater.quitAndInstall(); }
+        catch (e) { console.error('[Updater] quitAndInstall failed:', e.message); }
+      } else {
+        // /api/install-update fired before a download finished (or with no
+        // update at all) — quitAndInstall here would just error out.
+        console.log('[Updater] Install requested but no update downloaded — ignoring');
+      }
     }
   }, 2000);
+
+  // Versions come from our own release feed, but they land inside injected
+  // JS string literals — strip anything that could terminate the literal.
+  function safeVersion(v) {
+    return String(v || '').replace(/[^0-9A-Za-z.+-]/g, '');
+  }
 
   autoUpdater.on('checking-for-update', function() {
     console.log('[Updater] Checking for update...');
@@ -118,7 +136,7 @@ function setupAutoUpdater() {
       'var title=document.getElementById("update-inline-title");' +
       'var pctEl=document.getElementById("update-inline-pct");' +
       'if(box) box.style.display="block";' +
-      'if(title) title.textContent="Update v' + info.version + ' available — downloading";' +
+      'if(title) title.textContent="Update v' + safeVersion(info.version) + ' available — downloading";' +
       'if(pctEl) pctEl.textContent="0%";' +
       '})()'
     );
@@ -127,6 +145,9 @@ function setupAutoUpdater() {
   autoUpdater.on('download-progress', function(progress) {
     var pct = Math.round(progress.percent);
     console.log('[Updater] Download progress:', pct + '%');
+    // The inline card's 4s fallback reveals the install button at 100% even
+    // if update-downloaded never fires — let that button work too.
+    if (pct >= 100) updateDownloaded = true;
     inject(
       '(function(){' +
       'var box=document.getElementById("update-inline");' +
@@ -153,13 +174,14 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-downloaded', function(info) {
     console.log('[Updater] Update downloaded:', info.version);
+    updateDownloaded = true;
     inject(
       '(function(){' +
       'if(window.__updTimer){clearTimeout(window.__updTimer);window.__updTimer=null;}' +
       'var box=document.getElementById("update-inline");' +
       'if(box) box.style.display="block";' +
       'var t=document.getElementById("update-inline-title");' +
-      'if(t) t.textContent="Update v' + info.version + ' downloaded — ready to install";' +
+      'if(t) t.textContent="Update v' + safeVersion(info.version) + ' downloaded — ready to install";' +
       'var p=document.getElementById("update-inline-pct"); if(p) p.textContent="";' +
       'var w=document.getElementById("update-inline-bar-wrap"); if(w) w.style.display="none";' +
       'var a=document.getElementById("update-inline-actions"); if(a) a.style.display="flex";' +
