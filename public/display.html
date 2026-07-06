@@ -203,6 +203,7 @@ const PROD_POS={
   stream:{label:'Streaming',     color:'#639922'},
 };
 
+function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function initials(n){ if(!n||!n.trim())return '?'; const p=n.trim().split(' '); return p.length>1?(p[0][0]+p[p.length-1][0]).toUpperCase():p[0].slice(0,2).toUpperCase(); }
 function colorFor(n){ let h=0; for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h); return COLORS[Math.abs(h)%COLORS.length]; }
 
@@ -221,7 +222,7 @@ function makeIemRow(ch){
   const dotCls=!hasName?'off':(ch.bat!==null&&ch.bat<30)?'warn':'on';
   const col=colorFor(ch.name||ch.role);
   const av=hasName
-    ?(ch.photo?`<img src="${ch.photo}" alt="${ch.name}" onerror="this.style.display='none'">`:(initials(ch.name)))
+    ?(ch.photo?`<img src="${esc(ch.photo)}" alt="${esc(ch.name)}" onerror="this.style.display='none'">`:esc(initials(ch.name)))
     :'';
   const avatarEl=hasName
     ?`<div class="avatar-circle" style="background:${col};width:36px;height:36px;font-size:11px">${av}</div>`
@@ -230,10 +231,10 @@ function makeIemRow(ch){
     ? `<div class="bat ${ch.bat<20?'bat-red':ch.bat<40?'bat-amber':'bat-green'}"><span class="bat-body"><span class="bat-fill" style="width:${Math.max(6,ch.bat)}%"></span></span>${ch.bat}%</div>`
     : `<div></div>`;
   return `<div class="person-row iem-row${on?'':' na'}">
-    <div class="pack-num">${ch.wwbName?`<div>${ch.ch}</div><div class="wwb-name">${ch.wwbName}</div>`:ch.ch}</div>
+    <div class="pack-num">${ch.wwbName?`<div>${ch.ch}</div><div class="wwb-name">${esc(ch.wwbName)}</div>`:ch.ch}</div>
     ${avatarEl}
-    <div class="cell-name" style="color:var(--text);font-weight:900">${ch.name||'—'}</div>
-    <div class="cell-role" style="color:var(--text-mid);font-weight:700"><div class="s-dot ${dotCls}"></div>${ch.role}</div>
+    <div class="cell-name" style="color:var(--text);font-weight:900">${esc(ch.name)||'—'}</div>
+    <div class="cell-role" style="color:var(--text-mid);font-weight:700"><div class="s-dot ${dotCls}"></div>${esc(ch.role)}</div>
     ${batEl}
   </div>`;
 }
@@ -244,12 +245,12 @@ function renderProd(prod){
     .map(p => {
       const col = colorFor(p.name);
       const av = p.photo
-        ? `<img src="${p.photo}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.style.display='none'">`
-        : initials(p.name);
+        ? `<img src="${esc(p.photo)}" alt="${esc(p.name)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.style.display='none'">`
+        : esc(initials(p.name));
       return `<div style="display:grid;grid-template-columns:30px 1fr 1fr;gap:0 10px;align-items:center;padding:0 28px;border-bottom:1px solid var(--border);flex:1;min-height:0">
         <div class="avatar-circle" style="background:${col};width:28px;height:28px;font-size:9px;overflow:hidden;flex-shrink:0">${av}</div>
-        <div style="font-size:12px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${p.name}</div>
-        <div style="font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid)">${p.role}</div>
+        <div style="font-size:12px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${esc(p.name)}</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid)">${esc(p.role)}</div>
       </div>`;
     }).join('');
 }
@@ -282,12 +283,12 @@ function renderROS(ros){
   if(!ros||!ros.length)return '<div style="padding:24px 28px;color:var(--text-dim);font-size:13px">No plan loaded — load a service from Planning Center in the editor.</div>';
   let n=0;
   return ros.map(it=>{
-    if(it.type==='header')return `<div class="ros-header"><span class="ros-header-label">${it.title||''}</span><span class="ros-header-line"></span></div>`;
+    if(it.type==='header')return `<div class="ros-header"><span class="ros-header-label">${esc(it.title||'')}</span><span class="ros-header-line"></span></div>`;
     n++;
     const song=it.type==='song';
     return `<div class="ros-row${song?' song':''}">
       <div class="ros-num">${n}</div>
-      <div class="ros-title">${it.title||''}</div>
+      <div class="ros-title">${esc(it.title||'')}</div>
       <div class="ros-len">${fmtLen(it.length)}</div>
     </div>`;
   }).join('');
