@@ -36,14 +36,21 @@ const RULES_FILE   = path.join(DATA_DIR, 'rules.json');
 
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
 let _stateSaveTimer = null;
+function saveStateNow() {
+  _stateSaveTimer = null;
+  try { fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2)); }
+  catch(e) { console.error('[State] Save error:', e.message); }
+}
 function saveStateSoon() {
   if (_stateSaveTimer) return;
-  _stateSaveTimer = setTimeout(() => {
-    _stateSaveTimer = null;
-    try { fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2)); }
-    catch(e) { console.error('[State] Save error:', e.message); }
-  }, 500);
+  _stateSaveTimer = setTimeout(saveStateNow, 500);
 }
+// Flush a pending debounced save on shutdown so an edit made just before
+// quitting isn't lost. Only fires when a save is actually pending — never
+// writes default state over a good state.json during a startup crash.
+process.on('exit', () => {
+  if (_stateSaveTimer) { clearTimeout(_stateSaveTimer); saveStateNow(); }
+});
 
 // One-time migration: copy any data saved by older versions (inside the app
 // folder) into the home directory, without overwriting newer home-dir data.
@@ -207,6 +214,17 @@ try {
   }
 } catch(e) { console.error('[State] Restore error:', e.message); }
 
+// A state patch must be a plain object — spreading a string/array/null into
+// state would scatter numeric keys through it and corrupt the board.
+// If the slot arrays are present they must actually be arrays.
+function isStatePatch(p) {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
+  for (const k of ['iems', 'mics', 'prod', 'ros']) {
+    if (k in p && !Array.isArray(p[k])) return false;
+  }
+  return true;
+}
+
 // ─── Connected clients tracking ───────────────────────────────────────────────
 const clients = new Set();
 
@@ -232,26 +250,31 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-
-    if (msg.type === 'update') {
-      // Merge incoming state patch
-      state = { ...state, ...msg.payload };
-      saveStateSoon();
-      // Broadcast to all OTHER clients
-      broadcast({ type: 'state', payload: state }, ws);
-      console.log(`[~] State updated by ${ip}`);
-    }
-
-    if (msg.type === 'wwb_update') {
-      // Battery / frequency push from WWB bridge
-      const { id, arrayType, bat, freq } = msg.payload;
-      const arr = arrayType === 'mic' ? state.mics : state.iems;
-      const ch = arr.find(c => c.id === id);
-      if (ch) {
-        if (bat  !== undefined) ch.bat  = bat;
-        if (freq !== undefined) ch.freq = freq;
+    // A throw here would take down the whole server — never trust client input
+    try {
+      if (msg.type === 'update' && isStatePatch(msg.payload)) {
+        // Merge incoming state patch (last writer wins across editors)
+        state = { ...state, ...msg.payload };
+        saveStateSoon();
+        // Broadcast to all OTHER clients
+        broadcast({ type: 'state', payload: state }, ws);
+        console.log(`[~] State updated by ${ip}`);
       }
-      broadcast({ type: 'state', payload: state }, ws);
+
+      if (msg.type === 'wwb_update' && msg.payload) {
+        // Battery / frequency push from WWB bridge
+        const { id, arrayType, bat, freq } = msg.payload;
+        const arr = arrayType === 'mic' ? state.mics : state.iems;
+        const ch = arr.find(c => c.id === id);
+        if (ch) {
+          if (bat  !== undefined) ch.bat  = bat;
+          if (freq !== undefined) ch.freq = freq;
+          saveStateSoon();
+        }
+        broadcast({ type: 'state', payload: state }, ws);
+      }
+    } catch (e) {
+      console.error(`[WS] Bad message from ${ip}:`, e.message);
     }
   });
 
@@ -278,8 +301,8 @@ app.get('/edit', (req, res) =>
 // REST state endpoint (fallback for non-WS clients)
 app.get('/api/state', (req, res) => res.json(state));
 app.post('/api/state', (req, res) => {
+  if (!isStatePatch(req.body)) return res.status(400).json({ error: 'state patch must be an object' });
   state = { ...state, ...req.body };
-  saveStateSoon();
   saveStateSoon();
   broadcast({ type: 'state', payload: state });
   res.json({ ok: true });
