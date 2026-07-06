@@ -841,11 +841,23 @@ loadShureDevices();
 
 function pollShureDevice(dev) {
   return new Promise(resolve => {
-    const results = {}; // ch -> bars
+    const results = {}; // ch -> {bars, chanName}
     let buf = '';
+    let endTimer = null;
+    let settled = false;
+    const finish = (r) => {
+      if (settled) return;
+      settled = true;
+      if (endTimer) { clearTimeout(endTimer); endTimer = null; }
+      resolve(r);
+    };
     const sock = new net.Socket();
     sock.setTimeout(2500);
     sock.on('data', d => {
+      // Replies stream in arbitrary chunks; accumulate and re-scan the whole
+      // buffer so a REP split across packets is picked up once complete.
+      // Channels the receiver doesn't have answer with error REPs that simply
+      // don't match these patterns — harmless.
       buf += d.toString();
       let m;
       const re = /< REP (\d) BATT_BARS (\d+) >/g;
@@ -859,21 +871,34 @@ function pollShureDevice(dev) {
         results[parseInt(m[1])].chanName = m[2].trim();
       }
     });
-    sock.on('timeout', () => { sock.destroy(); resolve({ ok:false, error:'timeout', results }); });
-    sock.on('error', err => { resolve({ ok:false, error: err.code || err.message, results }); });
-    sock.on('close', () => resolve({ ok:true, results }));
+    sock.on('timeout', () => { sock.destroy(); finish({ ok:false, error:'timeout', results }); });
+    sock.on('error', err => { sock.destroy(); finish({ ok:false, error: err.code || err.message, results }); });
+    sock.on('close', () => finish({ ok:true, results }));
     sock.connect(dev.port || 2202, dev.ip, () => {
       [1,2,3,4].forEach(ch => {
         sock.write(`< GET ${ch} BATT_BARS >`);
         sock.write(`< GET ${ch} CHAN_NAME >`);
       });
-      setTimeout(() => sock.end(), 1200);
+      endTimer = setTimeout(() => sock.end(), 1200);
     });
   });
 }
 
+let _shurePolling = false;
 async function pollAllShure() {
   if (!shureDevices.length) return;
+  // Devices are polled sequentially and an unreachable one eats its full 2.5s
+  // timeout, so a cycle can outlast the 5s interval — skip instead of overlap.
+  if (_shurePolling) return;
+  _shurePolling = true;
+  try {
+    await pollShureCycle();
+  } finally {
+    _shurePolling = false;
+  }
+}
+
+async function pollShureCycle() {
   let changed = false;
   for (const dev of shureDevices) {
     const r = await pollShureDevice(dev);
