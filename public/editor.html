@@ -798,7 +798,6 @@ function savePositionTemplate() {
   try {
     localStorage.setItem('pos-template', JSON.stringify(tpl));
     document.getElementById('load-saved-tpl-btn').style.display = 'inline-flex';
-    document.getElementById('load-saved-tpl-btn').textContent = '';
     document.getElementById('load-saved-tpl-btn').innerHTML = '<i class="ti ti-bookmark"></i> Load "' + esc(name) + '"';
     document.getElementById('pos-tpl-result').innerHTML = '<span style="color:#4ade80">✓ Template "' + esc(name) + '" saved</span>';
     toast('<i class="ti ti-bookmark"></i> Template saved with wireless map: ' + esc(name));
@@ -981,11 +980,6 @@ async function importData(input) {
 }
 
 
-
-
-
-
-
 async function checkForUpdates(btn) {
   if (!btn) btn = document.querySelector('[onclick="checkForUpdates(this)"]') || event?.currentTarget;
   const result = document.getElementById('update-result');
@@ -999,11 +993,6 @@ async function checkForUpdates(btn) {
   }
   if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh"></i> Check for updates'; }
 }
-
-
-
-
-
 
 
 // ── People library ─────────────────────────────────────────────────────────────
@@ -1166,19 +1155,6 @@ function render(){
   // Refresh tag IEM dropdown
   const sel=document.getElementById('tag-iem');
   if(sel)sel.innerHTML='<option value="">— none —</option>'+state.iems.map((c,i)=>`<option value="${i}">${c.ch} — ${esc(c.role)}</option>`).join('');
-  // Rebuild datalist from pool + tags + current state names
-  const dl=document.getElementById('pool-list');
-  if(dl){
-    const seen=new Set();
-    const opts=[];
-    // From staging pool
-    stagingPool.forEach(p=>{if(p.name&&!seen.has(p.name)){seen.add(p.name);opts.push(p.name);}});
-    // From saved tags
-    Object.keys(savedTags).forEach(n=>{if(!seen.has(n)){seen.add(n);opts.push(n);}});
-    // From current state (names already assigned)
-    [...state.iems,...state.mics,...state.prod].forEach(c=>{if(c.name&&!seen.has(c.name)){seen.add(c.name);opts.push(c.name);}});
-    dl.innerHTML=opts.map(n=>`<option value="${n}">`).join('');
-  }
 }
 
 function avatar(name,photo,size=32){
@@ -1459,7 +1435,7 @@ function setTab(name){
 }
 
 function togglePanel(id){
-  const panels=['pco-load-panel','playlist-panel','tag-panel','people-panel','rules-panel','settings-panel'];
+  const panels=['pco-load-panel','playlist-panel','settings-panel'];
   panels.forEach(pid=>{
     const el=document.getElementById(pid);
     if(!el) return;
@@ -1482,15 +1458,15 @@ async function checkPCOAuth(){
     if(s.connected){
       if(dot) dot.style.background='var(--green)';
       if(lbl) lbl.innerHTML='Connected &nbsp;<button class="btn" style="padding:2px 8px;font-size:11px" onclick="disconnectPCO()">Disconnect</button>';
-      ['pco-connect-msg','pco-connect-msg-settings'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
-      ['pco-controls','pco-controls-settings'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block';});
+      document.getElementById('pco-connect-msg-settings').style.display='none';
+      document.getElementById('pco-controls-settings').style.display='block';
       if(pcoBtn) pcoBtn.style.display='inline-flex';
       fetchPCOServices();
     } else {
       if(dot) dot.style.background='#555';
       if(lbl) lbl.textContent='Not connected';
-      ['pco-connect-msg','pco-connect-msg-settings'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block';});
-      ['pco-controls','pco-controls-settings'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+      document.getElementById('pco-connect-msg-settings').style.display='block';
+      document.getElementById('pco-controls-settings').style.display='none';
       if(pcoBtn) pcoBtn.style.display='none';
     }
   }catch(e){}
@@ -1509,10 +1485,6 @@ async function savePCOCredentials(){
 async function disconnectPCO(){
   await fetch('/auth/disconnect',{method:'POST'});
   checkPCOAuth();
-}
-
-function openExternal(url){
-  window.open(url,'_blank');
 }
 
 async function fetchPCOServices(){
@@ -1813,7 +1785,6 @@ async function saveAsService(name){
   const d = await r.json();
   if (d.id) {
     await loadPlaylistUI();
-    renderPlaylistUI();
     toast('<i class="ti ti-check"></i> Saved: ' + esc(name));
   } else {
     toast('Error saving service', '#ef4444');
