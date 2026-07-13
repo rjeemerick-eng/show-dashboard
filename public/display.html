@@ -175,8 +175,9 @@ html, body {
         <span class="col-count" id="prod-ct"></span>
       </div>
       <div class="prod-list" id="prod-list"></div>
-      <!-- Bottom half: transparent — overlay your clock app here -->
-      <div style="flex:1;min-height:0;background:transparent"></div>
+      <!-- Bottom half: stage clock embed (Settings → Board), else transparent
+           so a clock app can be overlaid the old way -->
+      <div id="clock-zone" style="flex:1;min-height:0;background:transparent"></div>
     </div>
 
   </div>
@@ -294,6 +295,26 @@ function renderROS(ros){
   }).join('');
 }
 
+// Stage clock embed — only touch the iframe when the URL actually changes,
+// otherwise every state broadcast (battery polls etc.) would reload the clock
+let _clockUrl=null;
+function ensureClock(v){
+  const zone=document.getElementById('clock-zone');
+  if(!zone)return;
+  let url=((v&&v.clockUrl)||'').trim();
+  if(url&&!/^https?:\/\//i.test(url))url=''; // http(s) only — never javascript: etc.
+  if(url===_clockUrl)return;
+  _clockUrl=url;
+  zone.innerHTML='';
+  if(url){
+    const f=document.createElement('iframe');
+    f.src=url;
+    f.setAttribute('allow','autoplay');
+    f.style.cssText='width:100%;height:100%;border:0;display:block;background:transparent';
+    zone.appendChild(f);
+  }
+}
+
 function render(s){
   document.getElementById('svc-name').textContent=s.serviceName||'Sunday service';
   const activeIem=s.iems.filter(c=>c.status==='active').length;
@@ -303,6 +324,7 @@ function render(s){
 
   // View configuration: zone split + right zone content
   const v = s.view || { split: 50, rightZone: 'crew' };
+  ensureClock(v);
   const body = document.getElementById('board-body');
   const rightCol = document.getElementById('right-col');
   const divider = document.getElementById('col-divider');

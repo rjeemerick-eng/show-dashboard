@@ -258,6 +258,15 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
             onchange="setBoardView('split',parseInt(this.value))">
         </div>
       </div>
+      <div class="pf" style="margin-top:12px">
+        <label>Stage clock URL — embeds in the bottom-right of the board</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="view-clock-url" placeholder="e.g. https://stagetimer.io/r/ABCD/ or http://192.168.1.20:8080" style="flex:1">
+          <button class="btn success" onclick="applyClockUrl()"><i class="ti ti-clock"></i> Apply</button>
+          <button class="btn" onclick="document.getElementById('view-clock-url').value='';applyClockUrl()">Clear</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Applies live to every screen. Use your clock app's viewer link; if the page refuses to be embedded the area shows blank — leave empty to keep the spot transparent for a window overlay.</div>
+      </div>
       <div style="font-size:11px;color:var(--text-dim);margin-top:8px">Run of show fills automatically when you load a service from Planning Center.</div>
     </div>
 
@@ -1400,9 +1409,17 @@ function syncBoardViewControls(){
   const z = document.getElementById('view-zone');
   const s = document.getElementById('view-split');
   const l = document.getElementById('view-split-lbl');
+  const c = document.getElementById('view-clock-url');
   if (z) z.value = v.rightZone || 'crew';
   if (s) s.value = v.split || 50;
   if (l) l.textContent = v.split || 50;
+  if (c) c.value = v.clockUrl || '';
+}
+
+function applyClockUrl(){
+  const url = document.getElementById('view-clock-url').value.trim();
+  if (url && !/^https?:\/\//i.test(url)) { toast('Clock URL must start with http:// or https://', '#f59e0b'); return; }
+  setBoardView('clockUrl', url);
 }
 
 function setTab(name){
