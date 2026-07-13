@@ -292,13 +292,14 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       
   </div>
 
-  <div id="set-tab-library" style="display:none"><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start">
+  <div id="set-tab-library" style="display:none"><div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
     <!-- People library -->
       <div class="set-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div class="set-title" style="margin-bottom:0">People library <span id="people-count" style="font-weight:400"></span></div>
           <button class="btn" style="padding:3px 8px;font-size:11px" onclick="showAddPerson()"><i class="ti ti-plus"></i> Add</button>
         </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Default slots live on each person's profile — the <i class="ti ti-tag"></i> tag button on any board row saves that person's current slot here.</div>
         <div id="add-person-form" style="display:none;background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px;margin-bottom:8px">
           <div class="field-row two" style="margin-bottom:6px">
             <div class="pf"><label>Full name (match PCO)</label><input type="text" id="pp-name" placeholder="e.g. Ruben Mundo"></div>
@@ -323,34 +324,6 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
           </div>
         </div>
         <div id="people-list" style="max-height:300px;overflow-y:auto"></div>
-      </div>
-
-      <!-- Tags -->
-      <div class="set-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div class="set-title" style="margin-bottom:0">Position tags <span id="tag-count" style="font-weight:400"></span></div>
-        </div>
-        <button class="btn" style="margin-bottom:8px;padding:3px 10px;font-size:11px" onclick="const w=document.getElementById('tag-form-wrap');w.style.display=w.style.display==='none'?'block':'none'"><i class="ti ti-plus"></i> New tag</button>
-        <div id="tag-form-wrap" style="display:none;background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px;margin-bottom:8px">
-          <div class="field-row two" style="margin-bottom:6px">
-            <div class="pf"><label>Name</label><input type="text" id="tag-name" placeholder="e.g. Ruben Mundo"></div>
-            <div class="pf"><label>Photo URL</label><input type="text" id="tag-photo" placeholder="https://…"></div>
-          </div>
-          <div class="field-row two" style="margin-bottom:6px">
-            <div class="pf"><label>IEM slot</label><select id="tag-iem"><option value="">— none —</option></select></div>
-            <div class="pf"><label>Production position</label>
-              <select id="tag-prod">
-                <option value="">— none —</option>
-                <option value="cg">CG</option><option value="cam">Camera</option>
-                <option value="foh">FOH</option><option value="mon">Monitors</option>
-                <option value="light">Lighting</option><option value="stage">Stage hand</option>
-                <option value="dir">Director</option><option value="stream">Streaming</option>
-              </select>
-            </div>
-          </div>
-          <button class="btn success" onclick="saveTag()"><i class="ti ti-tag"></i> Save tag</button>
-        </div>
-        <div id="tag-list" style="max-height:300px;overflow-y:auto"></div>
       </div>
 
       <!-- Conflict rules -->
@@ -1162,9 +1135,6 @@ function render(){
   document.getElementById('prod-ct').textContent=state.prod.filter(c=>c.status==='active').length+' active';
   renderList('iem');
   renderList('prod');
-  // Refresh tag IEM dropdown
-  const sel=document.getElementById('tag-iem');
-  if(sel)sel.innerHTML='<option value="">— none —</option>'+state.iems.map((c,i)=>`<option value="${i}">${c.ch} — ${esc(c.role)}</option>`).join('');
 }
 
 function avatar(name,photo,size=32){
@@ -1673,68 +1643,15 @@ async function quickTag(type,id){
   const tag={name:ch.name,iemSlot:type!=='prod'?idx:null,micSlot:type!=='prod'?idx:null,prodPosition:type==='prod'?ch.position:null,photo:ch.photo||null};
   await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(tag)});
   savedTags[ch.name]=tag;
-  toast(`<i class="ti ti-tag"></i> ${esc(ch.name)} tagged`);
+  // Tag lives on the person's profile now — keep the in-memory library in sync
+  try{ peopleLibrary=await fetch('/api/people').then(r=>r.json()); }catch(e){}
+  toast(`<i class="ti ti-tag"></i> ${esc(ch.name)} saved to profile`);
   render();
 }
 
-// ── Tag panel ──────────────────────────────────────────────────────────────────
+// ── Tags (part of people profiles — managed via the People library card) ──────
 async function loadTags(){
   savedTags=await fetch('/api/tags').then(r=>r.json());
-  renderTagList();
-}
-
-function renderTagList(){
-  const names=Object.keys(savedTags);
-  document.getElementById('tag-count').textContent=names.length;
-  const PROD_LABELS={cg:'CG',cam:'Camera',foh:'FOH',mon:'Monitors',light:'Lighting',stage:'Stage hand',dir:'Director',stream:'Streaming'};
-  document.getElementById('tag-list').innerHTML=!names.length
-    ?'<div style="font-size:12px;color:var(--text-dim)">No tags yet.</div>'
-    :names.map(name=>{
-      const t=savedTags[name];
-      const iemLbl=t.iemSlot!=null?`IEM ${Number(t.iemSlot)+1} — ${state?.iems[t.iemSlot]?.role||''}`:null;
-      const prodLbl=t.prodPosition?PROD_LABELS[t.prodPosition]:null;
-      const col=colorFor(name);
-      const av=t.photo?`<img src="${esc(t.photo)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover">`
-        :`<div style="width:28px;height:28px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff">${esc(initials(name))}</div>`;
-      return`<div class="tag-row">
-        ${av}
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600">${esc(name)}</div>
-          <div style="font-size:10px;color:var(--text-dim)">${esc([iemLbl&&'📻 '+iemLbl,prodLbl&&'🎬 '+prodLbl].filter(Boolean).join(' · ')||'No slot set')}</div>
-        </div>
-        <button data-name="${esc(name)}" onclick="editTagLoad(this.dataset.name)" style="padding:3px 7px;border-radius:5px;border:1px solid var(--border-mid);background:none;color:var(--text-mid);cursor:pointer;font-size:11px"><i class="ti ti-edit"></i></button>
-        <button data-name="${esc(name)}" onclick="deleteTagNow(this.dataset.name)" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px"><i class="ti ti-trash"></i></button>
-      </div>`;
-    }).join('');
-}
-
-function editTagLoad(name){
-  const t=savedTags[name];
-  document.getElementById('tag-name').value=name;
-  document.getElementById('tag-photo').value=t.photo||'';
-  document.getElementById('tag-iem').value=t.iemSlot!=null?String(t.iemSlot):'';
-  document.getElementById('tag-prod').value=t.prodPosition||'';
-}
-
-async function saveTag(){
-  const name=document.getElementById('tag-name').value.trim();
-  if(!name){toast('Enter a name','#f59e0b');return}
-  const iemSlot=document.getElementById('tag-iem').value;
-  const prodPosition=document.getElementById('tag-prod').value;
-  const photo=document.getElementById('tag-photo').value.trim();
-  const tag={name,iemSlot:iemSlot!==''?parseInt(iemSlot):null,micSlot:iemSlot!==''?parseInt(iemSlot):null,prodPosition:prodPosition||null,photo:photo||null};
-  await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(tag)});
-  savedTags[name]=tag;
-  document.getElementById('tag-name').value='';
-  document.getElementById('tag-photo').value='';
-  toast('<i class="ti ti-tag"></i> Tag saved');
-  renderTagList();
-}
-
-async function deleteTagNow(name){
-  await fetch(`/api/tags/${encodeURIComponent(name)}`,{method:'DELETE'});
-  delete savedTags[name];
-  renderTagList();
 }
 
 // ── Playlist ───────────────────────────────────────────────────────────────────

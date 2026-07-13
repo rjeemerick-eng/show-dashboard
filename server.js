@@ -26,7 +26,8 @@ const PORT = process.env.PORT || 3000;
 // Data lives in the user's home folder so it SURVIVES app updates.
 // (Files inside the app bundle are wiped every time the app is replaced.)
 const os = require('os');
-const DATA_DIR = path.join(os.homedir(), '.show-dashboard');
+// Overridable for tests so a scratch dir can stand in for real user data
+const DATA_DIR = process.env.SHOW_DASH_DATA_DIR || path.join(os.homedir(), '.show-dashboard');
 try { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); } catch(e) {}
 
 const PLAYLIST_FILE = path.join(DATA_DIR, 'playlist.json');
@@ -94,24 +95,51 @@ function savePlaylist() {
   } catch(e) { console.error('[Playlist] Save error:', e.message); }
 }
 
-// ─── Name tags (persisted to disk) ───────────────────────────────────────────
-// tags: { "Ruben Mundo": { iemSlot: 2, micSlot: 2, prodPosition: null } }
-// iemSlot/micSlot = index into state.iems/mics (0-based), prodPosition = position id like 'foh'
-let tags = {};
-
-function loadTags() {
-  try {
-    if (fs.existsSync(TAGS_FILE)) {
-      tags = JSON.parse(fs.readFileSync(TAGS_FILE, 'utf8'));
-      console.log(`[Tags] Loaded ${Object.keys(tags).length} name tags`);
+// ─── Name tags ────────────────────────────────────────────────────────────────
+// Tags are part of a person's profile in the people library (defaultIemSlot /
+// defaultProdPosition / photo). The tag API keeps its old response shape as a
+// live view over people so clients and old backups keep working.
+// iemSlot/micSlot = index into state.iems/mics (0-based), prodPosition = 'foh' etc.
+function tagsView() {
+  const t = {};
+  people.forEach(p => {
+    if (p.defaultIemSlot != null || p.defaultProdPosition) {
+      t[p.name] = {
+        iemSlot: p.defaultIemSlot ?? null,
+        micSlot: p.defaultIemSlot ?? null, // mic mirrors the IEM slot
+        prodPosition: p.defaultProdPosition || null,
+        photo: p.photo || ''
+      };
     }
-  } catch(e) { console.error('[Tags] Load error:', e.message); }
+  });
+  return t;
 }
-function saveTags() {
-  try { fs.writeFileSync(TAGS_FILE, JSON.stringify(tags, null, 2)); }
-  catch(e) { console.error('[Tags] Save error:', e.message); }
+
+// One-time migration: fold legacy tags.json into people profiles. Existing
+// people keep their own values; tags only fill gaps or add missing people.
+// The file is renamed .migrated afterwards so this never runs twice.
+function migrateLegacyTags() {
+  try {
+    if (!fs.existsSync(TAGS_FILE)) return;
+    const legacy = JSON.parse(fs.readFileSync(TAGS_FILE, 'utf8'));
+    let n = 0;
+    Object.entries(legacy).forEach(([name, t]) => {
+      const p = people.find(x => x.name === name);
+      if (p) {
+        if (p.defaultIemSlot == null && t.iemSlot != null) { p.defaultIemSlot = t.iemSlot; n++; }
+        if (!p.defaultProdPosition && t.prodPosition) { p.defaultProdPosition = t.prodPosition; n++; }
+        if (!p.photo && t.photo) { p.photo = t.photo; n++; }
+      } else {
+        people.push({ id: 'person_' + Date.now() + '_' + people.length, name, photo: t.photo || '',
+          defaultIemSlot: t.iemSlot ?? null, defaultProdPosition: t.prodPosition || null, notes: '' });
+        n++;
+      }
+    });
+    if (n) savePeople();
+    fs.renameSync(TAGS_FILE, TAGS_FILE + '.migrated');
+    console.log(`[Tags] Migrated legacy tags.json into people library (${n} fields)`);
+  } catch(e) { console.error('[Tags] Migration error:', e.message); }
 }
-loadTags();
 
 // ─── People library (persisted) ───────────────────────────────────────────────
 // [{id, name, photo, defaultIemSlot, defaultProdPosition, notes}]
@@ -129,6 +157,7 @@ function savePeople() {
   catch(e) { console.error('[People] Save error:', e.message); }
 }
 loadPeople();
+migrateLegacyTags();
 
 // ─── Conflict rules (persisted) ───────────────────────────────────────────────
 // [{id, name, ifPerson, ifSlotType, ifSlot, thenPerson, thenSlotType, thenSlot}]
@@ -575,9 +604,7 @@ app.post('/api/people', (req, res) => {
   const person = { id: existing >= 0 ? people[existing].id : 'person_' + Date.now(), name, photo: photo||'', defaultIemSlot: defaultIemSlot??null, defaultProdPosition: defaultProdPosition||null, notes: notes||'' };
   if (existing >= 0) people[existing] = person;
   else people.push(person);
-  // Also sync to tags
-  tags[name] = { iemSlot: defaultIemSlot??null, micSlot: defaultIemSlot??null, prodPosition: defaultProdPosition||null, photo: photo||'' };
-  savePeople(); saveTags();
+  savePeople();
   console.log(`[People] Saved: "${name}"`);
   res.json({ ok: true, person });
 });
@@ -647,12 +674,12 @@ app.post('/api/rules/apply', (req, res) => {
 
 // ─── Name tags endpoints ──────────────────────────────────────────────────────
 
-// Get all tags
-app.get('/api/tags', (req, res) => res.json(tags));
+// Get all tags (derived live from people profiles)
+app.get('/api/tags', (req, res) => res.json(tagsView()));
 
 // Return all tagged people as a staging pool (so PCO pull is optional)
 app.get('/api/tags/pool', (req, res) => {
-  const pool = Object.entries(tags).map(([name, t]) => ({
+  const pool = Object.entries(tagsView()).map(([name, t]) => ({
     name,
     photo: t.photo || '',
     position: t.prodPosition || '',
@@ -664,33 +691,31 @@ app.get('/api/tags/pool', (req, res) => {
   res.json(pool);
 });
 
-// Set or update a tag — now stores photo too
+// Set or update a tag — writes straight to the person's profile
 app.post('/api/tags', (req, res) => {
-  const { name, iemSlot, micSlot, prodPosition, photo } = req.body;
+  const { name, iemSlot, prodPosition, photo } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  tags[name] = { iemSlot, micSlot, prodPosition, photo: photo || tags[name]?.photo || '' };
-  saveTags();
-  // Upsert into people library so tagged people are permanently saved
   const existing = people.findIndex(p => p.name === name);
+  const prev = existing >= 0 ? people[existing] : null;
   const person = {
-    id: existing >= 0 ? people[existing].id : 'person_' + Date.now(),
+    id: prev ? prev.id : 'person_' + Date.now(),
     name,
-    photo: photo || (existing >= 0 ? people[existing].photo : '') || '',
-    defaultIemSlot: iemSlot ?? (existing >= 0 ? people[existing].defaultIemSlot : null),
-    defaultProdPosition: prodPosition || (existing >= 0 ? people[existing].defaultProdPosition : null),
-    notes: existing >= 0 ? people[existing].notes : ''
+    photo: photo || (prev ? prev.photo : '') || '',
+    defaultIemSlot: iemSlot ?? null,
+    defaultProdPosition: prodPosition || null,
+    notes: prev ? prev.notes : ''
   };
   if (existing >= 0) people[existing] = person; else people.push(person);
   savePeople();
-  console.log(`[Tags] Saved tag + person for "${name}"`);
+  console.log(`[Tags] Saved defaults on profile for "${name}"`);
   res.json({ ok: true });
 });
 
-// Delete a tag
+// Delete a tag — clears the person's default slots but keeps their profile
 app.delete('/api/tags/:name', (req, res) => {
   const name = decodeURIComponent(req.params.name);
-  delete tags[name];
-  saveTags();
+  const p = people.find(x => x.name === name);
+  if (p) { p.defaultIemSlot = null; p.defaultProdPosition = null; savePeople(); }
   res.json({ ok: true });
 });
 
@@ -700,6 +725,7 @@ app.post('/api/tags/apply', (req, res) => {
   const iemAssign  = {};
   const prodAssign = {};
   const unmatched  = [];
+  const tags = tagsView();
 
   roster.forEach(person => {
     const tag = tags[person.name];
@@ -789,7 +815,7 @@ app.get('/api/export', (req, res) => {
   const bundle = {
     exportedAt: new Date().toISOString(),
     version: '1.0',
-    tags,
+    tags: tagsView(), // derived; kept in the bundle so old installs can import it
     people,
     rules,
     playlist,
@@ -806,8 +832,23 @@ app.post('/api/import', (req, res) => {
   const bundle = req.body;
   if (!bundle || !bundle.version) return res.status(400).json({ error: 'Invalid bundle' });
   try {
-    if (bundle.tags)     { Object.assign(tags, bundle.tags); saveTags(); }
     if (bundle.people)   { people = bundle.people; savePeople(); }
+    if (bundle.tags) {
+      // Old backups carry a separate tags map — fold it into people profiles
+      // the same way the boot migration does (existing profile values win).
+      Object.entries(bundle.tags).forEach(([name, t]) => {
+        const p = people.find(x => x.name === name);
+        if (p) {
+          if (p.defaultIemSlot == null && t.iemSlot != null) p.defaultIemSlot = t.iemSlot;
+          if (!p.defaultProdPosition && t.prodPosition) p.defaultProdPosition = t.prodPosition;
+          if (!p.photo && t.photo) p.photo = t.photo;
+        } else {
+          people.push({ id: 'person_' + Date.now() + '_' + people.length, name, photo: t.photo || '',
+            defaultIemSlot: t.iemSlot ?? null, defaultProdPosition: t.prodPosition || null, notes: '' });
+        }
+      });
+      savePeople();
+    }
     if (bundle.rules)    { rules  = bundle.rules;  saveRules(); }
     if (bundle.playlist) { playlist = bundle.playlist; }
     if (bundle.activeServiceId) activeServiceId = bundle.activeServiceId;
@@ -816,7 +857,7 @@ app.post('/api/import', (req, res) => {
     saveStateSoon();
   broadcast({ type: 'state', payload: state });
     console.log('[Import] Data imported successfully');
-    res.json({ ok: true, imported: { tags: Object.keys(tags).length, people: people.length, rules: rules.length, services: playlist.length } });
+    res.json({ ok: true, imported: { tags: Object.keys(tagsView()).length, people: people.length, rules: rules.length, services: playlist.length } });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
