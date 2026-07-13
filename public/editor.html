@@ -426,8 +426,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       <div>
         <!-- Remote access -->
       <div class="set-card">
-        <div class="set-title">Remote access</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Open these on any device on the same network — everything syncs live. The .local address stays the same even if the IP changes.</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div class="set-title" style="margin-bottom:0">Remote access</div>
+          <button class="btn" style="padding:3px 8px;font-size:11px" onclick="refreshConnectInfo()"><i class="ti ti-refresh"></i> Refresh</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Open these on any device on the same network — everything syncs live. The .local address stays the same even if the IP changes. Hit Refresh after switching networks to pick up a new IP.</div>
         <div id="connect-info" style="font-size:12px;color:var(--text-mid)">Loading…</div>
       </div>
     </div>
@@ -925,6 +928,13 @@ async function loadConnectInfo() {
     out += `<div style="font-size:10px;color:var(--text-dim)">Open on any device on the same network — changes sync live to every screen. For a fixed numeric IP, set a DHCP reservation for this Mac in your router.</div>`;
     el.innerHTML = out;
   } catch(e) { el.textContent = 'Unavailable'; }
+}
+
+async function refreshConnectInfo() {
+  const el = document.getElementById('connect-info');
+  if (el) el.textContent = 'Refreshing…';
+  await loadConnectInfo();
+  toast('<i class="ti ti-refresh"></i> Network addresses refreshed');
 }
 
 async function loadSettingsPanel() {
