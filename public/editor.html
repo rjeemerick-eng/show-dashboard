@@ -1508,11 +1508,41 @@ async function fetchUpcomingForType(){
 }
 
 function classifyPerson(person){
+  // Anyone scheduled on a vocals/band team is a player/singer and belongs on
+  // an IEM slot no matter what their position title says — e.g. "Worship
+  // Pastor" on the VOCALS team would otherwise match the Director rule.
+  const team=(person.teamName||'').toLowerCase();
+  if(/vocal|vox|singer|band/.test(team)) return{type:'iem'};
   const pos=(person.position||person.teamName||'').toLowerCase();
   for(const rule of PCO_POS_MAP){
     if(rule.keys.some(k=>pos.includes(k))) return rule.prod?{type:'prod',sub:rule.prod}:{type:'iem'};
   }
   return{type:'iem'};
+}
+
+// Auto-place a band/vocal person into an empty IEM slot whose role label
+// matches their instrument. Position title and team name both count, so
+// "Worship Pastor" on VOCALS lands on a Vox slot.
+const IEM_ROLE_HINTS=[
+  {person:/drum|perc/, slot:/drum/},
+  {person:/bass/, slot:/bass/},
+  {person:/guitar|gtr|electric|acoustic/, slot:/gtr|guitar/},
+  {person:/keys|keyboard|piano/, slot:/key/},
+  {person:/vox|vocal|soprano|alto|tenor|singer|worship/, slot:/vox/},
+];
+function autoPlaceIem(person){
+  if(!person.name)return;
+  // Never double-place someone who is already on the board (e.g. scheduled
+  // on two teams in the same plan)
+  if([...state.iems,...state.mics,...state.prod].some(c=>c.name===person.name))return;
+  const key=((person.position||'')+' '+(person.teamName||'')).toLowerCase();
+  const hint=IEM_ROLE_HINTS.find(h=>h.person.test(key));
+  if(!hint)return;
+  const idx=state.iems.findIndex(c=>!c.name&&hint.slot.test((c.role||'').toLowerCase()));
+  if(idx===-1)return;
+  const iem=state.iems[idx],mic=state.mics[idx];
+  iem.name=person.name;iem.status='active';if(person.photo)iem.photo=person.photo;
+  if(mic&&!mic.name){mic.name=person.name;mic.status='active';if(person.photo)mic.photo=person.photo;}
 }
 
 async function loadFromTags(){
@@ -1608,6 +1638,11 @@ async function loadRoster(isRefresh=false){
       if(person.classified.type==='prod'){
         const idx=state.prod.findIndex(p=>p.position===person.classified.sub&&!p.name);
         if(idx!==-1){state.prod[idx].name=person.name;state.prod[idx].status='active';if(person.photo)state.prod[idx].photo=person.photo}
+      } else {
+        // Band/vocal people used to sit in the dropdown pool only — place
+        // them on matching empty IEM slots so the whole VOCALS schedule
+        // lands on the board.
+        autoPlaceIem(person);
       }
     });
 
