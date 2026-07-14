@@ -759,7 +759,9 @@ app.post('/api/playlist', (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   const id = 'svc_' + Date.now();
-  playlist.push({ id, name, createdAt: new Date().toISOString(), state: JSON.parse(JSON.stringify(state)) });
+  const snap = JSON.parse(JSON.stringify(state));
+  snap.serviceName = name; // board title must match the service's playlist name
+  playlist.push({ id, name, createdAt: new Date().toISOString(), state: snap });
   savePlaylist();
   broadcast({ type: 'playlist', payload: { playlist: playlist.map(s=>({id:s.id,name:s.name,createdAt:s.createdAt,active:s.id===activeServiceId})), activeServiceId } });
   res.json({ id, name });
@@ -774,6 +776,8 @@ app.patch('/api/playlist/:id', (req, res) => {
   if (req.body.saveCurrentState) svc.state = JSON.parse(JSON.stringify(state));
   // Or overwrite with a provided blank state
   if (req.body.blankState) svc.state = req.body.blankState;
+  // Keep the snapshot's board title in sync with the playlist name
+  if (svc.state) svc.state.serviceName = svc.name;
   savePlaylist();
   res.json({ ok: true });
 });
@@ -792,6 +796,7 @@ app.post('/api/playlist/:id/go-live', (req, res) => {
   const svc = playlist.find(s => s.id === req.params.id);
   if (!svc) return res.status(404).json({ error: 'Not found' });
   state = JSON.parse(JSON.stringify(svc.state));
+  state.serviceName = svc.name; // guarantee the live board title matches, even for old snapshots
   activeServiceId = svc.id;
   savePlaylist();
   saveStateSoon();
