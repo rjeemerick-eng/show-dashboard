@@ -248,8 +248,8 @@ try {
 // If the slot arrays are present they must actually be arrays.
 function isStatePatch(p) {
   if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
-  for (const k of ['iems', 'mics', 'prod', 'ros']) {
-    if (k in p && !Array.isArray(p[k])) return false;
+  for (const k of ['iems', 'mics', 'prod', 'ros', 'roster']) {
+    if (k in p && p[k] !== null && !Array.isArray(p[k])) return false;
   }
   return true;
 }
@@ -759,7 +759,10 @@ app.post('/api/playlist', (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   const id = 'svc_' + Date.now();
-  const snap = JSON.parse(JSON.stringify(state));
+  // Snapshot the caller's state when provided (the editor sends its freshly
+  // built board on PCO load, before any WS push lands) — else current state
+  const src = isStatePatch(req.body.state) ? req.body.state : state;
+  const snap = JSON.parse(JSON.stringify(src));
   snap.serviceName = name; // board title must match the service's playlist name
   playlist.push({ id, name, createdAt: new Date().toISOString(), state: snap });
   savePlaylist();
@@ -774,8 +777,8 @@ app.patch('/api/playlist/:id', (req, res) => {
   if (req.body.name) svc.name = req.body.name;
   // Optionally overwrite state with current
   if (req.body.saveCurrentState) svc.state = JSON.parse(JSON.stringify(state));
-  // Or overwrite with a provided blank state
-  if (req.body.blankState) svc.state = req.body.blankState;
+  // Or overwrite with a provided state (blank service, or editor re-load)
+  if (req.body.blankState && isStatePatch(req.body.blankState)) svc.state = req.body.blankState;
   // Keep the snapshot's board title in sync with the playlist name
   if (svc.state) svc.state.serviceName = svc.name;
   savePlaylist();

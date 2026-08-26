@@ -513,6 +513,7 @@ function connect(){
     if(msg.type==='state'){
       const firstLoad = !state;
       state=msg.payload;
+      syncPoolFromState();
       render();
       // On first connect, pre-load tags and check PCO auth
       if(firstLoad) { preloadTagsPool(); checkPCOAuth(); }
@@ -520,14 +521,27 @@ function connect(){
     if(msg.type==='playlist')handlePlaylist(msg.payload);
     if(msg.type==='went_live'){
       toast(`<i class="ti ti-broadcast"></i> Now live: ${esc(msg.payload.name)}`);
-      // Clear PCO pool when switching services — dropdowns will repopulate from tags only
-      stagingPool = [];
-      poolSource='tags';
-      preloadTagsPool();
+      // Pool follows the live service — syncPoolFromState() already switched
+      // dropdowns to its PCO roster, or back to the people library if it has none.
     }
   };
 }
 connect();
+
+// The dropdown pool follows the live service. A service loaded from PCO
+// carries its week's roster in state.roster, so every editor (and every
+// restart) shows ONLY that week's people; without a roster, dropdowns fall
+// back to the people library / tags.
+function syncPoolFromState(){
+  if(state&&Array.isArray(state.roster)&&state.roster.length){
+    stagingPool=state.roster.map(p=>({...p,classified:{type:p.prodPosition?'prod':'iem',sub:p.prodPosition||'iem'}}));
+    poolSource='pco';
+  } else if(poolSource==='pco'){
+    stagingPool=[];
+    poolSource='tags';
+    preloadTagsPool();
+  }
+}
 
 async function preloadTagsPool(){
   try {
@@ -592,6 +606,9 @@ async function confirmQuickAdd() {
   savedTags = await fetch('/api/tags').then(r=>r.json());
   // Make available in dropdowns even in PCO-roster mode
   if (!stagingPool.find(p=>p.name===name)) stagingPool.push({ name, photo:'', classified:{type:'iem',sub:'iem'} });
+  // Persist into the live week's roster, otherwise the next state broadcast
+  // would rebuild the pool without them
+  if (Array.isArray(state.roster) && !state.roster.find(p=>p.name===name)) { state.roster.push({ name, photo:'', position:'', teamName:'' }); push(); }
   // Assign to the slot that opened the dialog
   if (pa) {
     if (pa.kind === 'slot') assignSlot(pa.ref.type, pa.ref.id, name);
@@ -1549,6 +1566,8 @@ async function loadFromTags(){
     savedTags = await fetch('/api/tags').then(r => r.json());
     const pool = await fetch('/api/tags/pool').then(r => r.json());
     stagingPool = pool.map(p => ({ ...p, classified: { type: p.prodPosition ? 'prod' : 'iem', sub: p.prodPosition || 'iem' } }));
+    poolSource = 'tags';
+    state.roster = null; // not a PCO week — dropdowns come from the library
 
     // Apply tags to slots
     stagingPool.forEach(person => {
@@ -1575,9 +1594,12 @@ async function loadFromTags(){
 
 async function loadRoster(isRefresh=false){
   const typeId=document.getElementById('pco-svc-type').value;
-  const planId=document.getElementById('pco-plan-sel').value;
+  const planSel=document.getElementById('pco-plan-sel');
+  const planId=planSel.value;
   const status=document.getElementById('pco-status');
   if(!typeId||!planId){status.textContent='Select service type and plan first.';return}
+  // Service name = the plan's date label, without the year ("August 9, 2026" -> "August 9")
+  const planName=((planSel.selectedOptions[0]?.textContent)||'').replace(/,\s*\d{4}\s*$/,'').trim()||'PCO service';
   status.textContent=isRefresh?'Refreshing…':'Loading roster…';
   try{
     const data=await fetch(`/api/pco-roster?typeId=${typeId}&planId=${planId}`).then(r=>r.json());
@@ -1604,10 +1626,12 @@ async function loadRoster(isRefresh=false){
       const used=new Set([...state.iems,...state.mics,...state.prod].map(c=>c.name).filter(Boolean));
       const newPeople=freshPool.filter(p=>!existing.has(p.name)&&!used.has(p.name));
       stagingPool.push(...newPeople);
+      // Keep the week's roster in state so every editor sees the additions
+      if(Array.isArray(state.roster))state.roster.push(...newPeople.map(p=>({name:p.name,photo:p.photo||'',position:p.position||'',teamName:p.teamName||''})));
       status.innerHTML=newPeople.length
         ?`<span style="color:#4ade80">${newPeople.length} new: ${esc(newPeople.map(p=>p.name).join(', '))}</span>`
         :`<span style="color:var(--text-dim)">No new people</span>`;
-      render();return;
+      render();push();return;
     }
 
     // Clear previous week's assignments from the board
@@ -1616,6 +1640,10 @@ async function loadRoster(isRefresh=false){
     state.prod.forEach(p=>{p.name='';p.photo='';});
     stagingPool=freshPool;
     poolSource='pco';
+    // The week's roster travels with the service: dropdowns everywhere show
+    // only these people while this service is live
+    state.roster=freshPool.map(p=>({name:p.name,photo:p.photo||'',position:p.position||'',teamName:p.teamName||''}));
+    state.serviceName=planName;
     // Apply tags
     stagingPool.forEach(person=>{
       const tag=savedTags[person.name];
@@ -1644,11 +1672,31 @@ async function loadRoster(isRefresh=false){
     });
 
     const tagCount=stagingPool.filter(p=>savedTags[p.name]).length;
-    status.innerHTML=`<span style="color:#7eb8f5">${stagingPool.length} people loaded${tagCount?`, ${tagCount} auto-assigned`:''}</span>`;
     document.getElementById('refresh-btn').style.display='inline-flex';
     render();push();
-    applyConflictRules();
+    await applyConflictRules();
+    // Save this week as its own service and put it on the board automatically
+    await autoSaveAndGoLive(planName);
+    status.innerHTML=`<span style="color:#7eb8f5">${stagingPool.length} people loaded${tagCount?`, ${tagCount} auto-assigned`:''} — saved &amp; live as “${esc(planName)}”</span>`;
   }catch(e){status.textContent='Error: '+e.message}
+}
+
+// Create (or update) a playlist entry named after the PCO plan and go live
+// with it, so the board title and the saved service always match the week.
+async function autoSaveAndGoLive(name){
+  try{
+    const d=await fetch('/api/playlist').then(r=>r.json());
+    const existing=(d.playlist||[]).find(s=>s.name===name);
+    let id=existing&&existing.id;
+    if(id){
+      await fetch(`/api/playlist/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({blankState:state})});
+    } else {
+      const r=await fetch('/api/playlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,state})}).then(r=>r.json());
+      id=r.id;
+    }
+    if(id)await fetch(`/api/playlist/${id}/go-live`,{method:'POST'});
+    loadPlaylistUI();
+  }catch(e){}
 }
 
 // ── Quick tag from row ─────────────────────────────────────────────────────────
@@ -1740,6 +1788,7 @@ async function doSaveService() {
 async function newBlankService(name){
   const blank = JSON.parse(JSON.stringify(state));
   blank.serviceName = name;
+  blank.roster = null; // fresh week — dropdowns come from the library
   blank.mics.forEach(c => { c.name=''; c.photo=''; c.status='na'; });
   blank.iems.forEach(c => { c.name=''; c.photo=''; c.status='na'; c.mix=''; });
   blank.prod.forEach(c => { c.name=''; c.photo=''; });
