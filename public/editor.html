@@ -220,6 +220,39 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         </div>
       </div>
 
+      <!-- Automatic weekly pull -->
+      <div class="set-card">
+        <div class="set-title">Automatic weekly pull</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">On a schedule, pull the next upcoming plan from Planning Center, build the board, and save it as a service named after the plan date. If the Mac is asleep at the scheduled time it runs as soon as the app is back up.</div>
+        <div class="field-row two" style="margin-bottom:8px">
+          <div class="pf"><label>Schedule</label>
+            <select id="ap-enabled"><option value="0">Off</option><option value="1">On</option></select>
+          </div>
+          <div class="pf"><label>Service type</label>
+            <select id="ap-type"><option value="">Select…</option></select>
+          </div>
+        </div>
+        <div class="field-row three" style="margin-bottom:10px">
+          <div class="pf"><label>Day</label>
+            <select id="ap-day">
+              <option value="0">Sunday</option><option value="1">Monday</option>
+              <option value="2">Tuesday</option><option value="3">Wednesday</option>
+              <option value="4">Thursday</option><option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+          </div>
+          <div class="pf"><label>Time</label><input type="time" id="ap-time" value="09:00"></div>
+          <div class="pf"><label>Board</label>
+            <select id="ap-golive"><option value="1">Go live automatically</option><option value="0">Just save the service</option></select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn success" onclick="saveAutoPullSchedule()"><i class="ti ti-check"></i> Save schedule</button>
+          <button class="btn" onclick="runAutoPullNow()"><i class="ti ti-player-play"></i> Run now</button>
+        </div>
+        <div id="ap-status" style="margin-top:8px;font-size:11px;color:var(--text-dim)"></div>
+      </div>
+
       
       </div>
       <div>
@@ -929,6 +962,56 @@ async function loadConnectInfo() {
   } catch(e) { el.textContent = 'Unavailable'; }
 }
 
+// ── Automatic weekly PCO pull ──────────────────────────────────────────────────
+async function loadAutoPullPanel(){
+  try{
+    const cfg=await fetch('/api/autopull').then(r=>r.json());
+    const en=document.getElementById('ap-enabled'); if(en)en.value=cfg.enabled?'1':'0';
+    const day=document.getElementById('ap-day'); if(day)day.value=String(cfg.day??4);
+    const t=document.getElementById('ap-time'); if(t)t.value=cfg.time||'09:00';
+    const gl=document.getElementById('ap-golive'); if(gl)gl.value=cfg.goLive===false?'0':'1';
+    const sel=document.getElementById('ap-type');
+    if(sel){
+      try{
+        const d=await fetch('/api/pco/services/v2/service_types?per_page=25').then(r=>r.json());
+        sel.innerHTML='<option value="">Select…</option>'+(d.data||[]).map(tp=>`<option value="${esc(tp.id)}"${tp.id===cfg.typeId?' selected':''}>${esc(tp.attributes.name)}</option>`).join('');
+      }catch(e){
+        if(cfg.typeId)sel.innerHTML=`<option value="${esc(cfg.typeId)}" selected>${esc(cfg.typeName||cfg.typeId)}</option>`;
+      }
+    }
+    renderAutoPullStatus(cfg);
+  }catch(e){}
+}
+function renderAutoPullStatus(cfg){
+  const el=document.getElementById('ap-status'); if(!el)return;
+  const bits=[];
+  if(cfg.lastResult)bits.push('Last: '+esc(cfg.lastResult));
+  if(cfg.enabled&&cfg.nextRun)bits.push('Next scheduled: '+esc(new Date(cfg.nextRun).toLocaleString()));
+  el.innerHTML=bits.join('<br>')||'Never run.';
+}
+async function saveAutoPullSchedule(){
+  const sel=document.getElementById('ap-type');
+  const body={
+    enabled:document.getElementById('ap-enabled').value==='1',
+    typeId:sel.value,
+    typeName:sel.selectedOptions[0]?.textContent||'',
+    day:parseInt(document.getElementById('ap-day').value),
+    time:document.getElementById('ap-time').value||'09:00',
+    goLive:document.getElementById('ap-golive').value==='1'
+  };
+  if(body.enabled&&!body.typeId){toast('Pick a service type first','#f59e0b');return;}
+  await fetch('/api/autopull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  toast('<i class="ti ti-calendar-check"></i> Weekly pull schedule saved');
+  loadAutoPullPanel();
+}
+async function runAutoPullNow(){
+  const el=document.getElementById('ap-status'); if(el)el.textContent='Running…';
+  const r=await fetch('/api/autopull/run',{method:'POST'}).then(res=>res.json()).catch(e=>({error:e.message}));
+  if(r.ok)toast(`<i class="ti ti-cloud-download"></i> Pulled “${esc(r.name)}” — ${r.people} people${r.live?', now live':''}`);
+  else toast('Auto-pull failed: '+esc(r.error||'unknown'),'#ef4444');
+  loadAutoPullPanel();
+}
+
 async function refreshConnectInfo() {
   const el = document.getElementById('connect-info');
   if (el) el.textContent = 'Refreshing…';
@@ -1459,7 +1542,7 @@ function togglePanel(id){
   if(id==='playlist-panel'&&document.getElementById('playlist-panel').classList.contains('open'))loadPlaylistUI();
   if(id==='pco-load-panel'&&document.getElementById('pco-load-panel').classList.contains('open'))fetchPCOServices();
   if(id==='settings-panel'&&document.getElementById('settings-panel').classList.contains('open')){
-    checkPCOAuth(); loadTags(); loadPeoplePanel(); loadRulesPanel(); loadSettingsPanel(); renderPositionConfig(); loadShurePanel(); syncBoardViewControls();
+    checkPCOAuth(); loadTags(); loadPeoplePanel(); loadRulesPanel(); loadSettingsPanel(); renderPositionConfig(); loadShurePanel(); syncBoardViewControls(); loadAutoPullPanel();
   }
 }
 

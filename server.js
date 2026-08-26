@@ -489,26 +489,23 @@ async function refreshPCOToken() {
   return false;
 }
 
-// ─── Smart PCO roster endpoint — returns people keyed by position name ────────
-app.get('/api/pco-roster', async (req, res) => {
-  if (!pcoAccessToken) return res.status(401).json({ error: 'Not connected' });
-  const { typeId, planId } = req.query;
-  if (!typeId || !planId) return res.status(400).json({ error: 'Missing typeId or planId' });
-
+// ─── Shared PCO GET helper (also used by the weekly auto-pull) ─────────────────
+function pcoGet(pcoPath) {
   const https = require('https');
-  function pcoGet(path) {
-    return new Promise((resolve, reject) => {
-      https.get({
-        hostname: 'api.planningcenteronline.com',
-        path,
-        headers: { 'Authorization': getPCOAuthHeader(), 'User-Agent': 'ShowDashboard/1.0', 'Accept': 'application/json' }
-      }, (r) => {
-        let d = ''; r.on('data', c => d += c); r.on('end', () => resolve(JSON.parse(d)));
-      }).on('error', reject);
-    });
-  }
+  return new Promise((resolve, reject) => {
+    https.get({
+      hostname: 'api.planningcenteronline.com',
+      path: pcoPath,
+      headers: { 'Authorization': getPCOAuthHeader(), 'User-Agent': 'ShowDashboard/1.0', 'Accept': 'application/json' }
+    }, (r) => {
+      let d = ''; r.on('data', c => d += c);
+      r.on('end', () => { try { resolve(JSON.parse(d)); } catch(e) { reject(new Error('PCO returned non-JSON (' + r.statusCode + ')')); } });
+    }).on('error', reject);
+  });
+}
 
-  try {
+// Fetch a plan's team members grouped by team, with photos
+async function fetchPCORosterGrouped(typeId, planId) {
     // Fetch team members including team + person for photos
     const tmRes = await pcoGet(`/services/v2/service_types/${typeId}/plans/${planId}/team_members?per_page=100&include=team,person`);
     const members  = tmRes.data     || [];
@@ -545,7 +542,16 @@ app.get('/api/pco-roster', async (req, res) => {
       grouped[teamName].push({ name, position, status, teamName, photo });
     });
 
-    res.json({ grouped, total: members.length });
+    return { grouped, total: members.length };
+}
+
+// ─── Smart PCO roster endpoint — returns people keyed by position name ────────
+app.get('/api/pco-roster', async (req, res) => {
+  if (!pcoAccessToken) return res.status(401).json({ error: 'Not connected' });
+  const { typeId, planId } = req.query;
+  if (!typeId || !planId) return res.status(400).json({ error: 'Missing typeId or planId' });
+  try {
+    res.json(await fetchPCORosterGrouped(typeId, planId));
   } catch(e) {
     console.error('[PCO roster]', e.message);
     res.status(500).json({ error: e.message });
@@ -631,10 +637,9 @@ app.delete('/api/rules/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// Apply conflict rules to a given state snapshot — returns modified state + changelog
-app.post('/api/rules/apply', (req, res) => {
-  const { state: s } = req.body;
-  if (!s) return res.status(400).json({ error: 'state required' });
+// Apply conflict rules to a state snapshot in place — returns the changelog
+// (used by the REST endpoint and by the weekly auto-pull)
+function applyRulesTo(s) {
   const changes = [];
 
   rules.forEach(rule => {
@@ -669,6 +674,14 @@ app.post('/api/rules/apply', (req, res) => {
     changes.push(`Rule fired: "${rule.ifPerson}" scheduled → moved "${rule.thenPerson}" to ${rule.thenSlotType.toUpperCase()} ${targetIdx + 1}${displaced ? `, displaced "${displaced}"` : ''}`);
   });
 
+  return changes;
+}
+
+// Apply conflict rules to a given state snapshot — returns modified state + changelog
+app.post('/api/rules/apply', (req, res) => {
+  const { state: s } = req.body;
+  if (!s) return res.status(400).json({ error: 'state required' });
+  const changes = applyRulesTo(s);
   res.json({ state: s, changes });
 });
 
@@ -816,6 +829,200 @@ app.get('/api/playlist/:id/preview', (req, res) => {
   if (!svc) return res.status(404).json({ error: 'Not found' });
   res.json(svc.state);
 });
+
+// ─── Automatic weekly PCO pull ────────────────────────────────────────────────
+// On a schedule (or the "Run now" button), pull the next upcoming plan for the
+// configured service type, build the board exactly like a manual editor load
+// (tags first, then auto-classification, then conflict rules), save it as a
+// playlist entry named after the plan date, and optionally go live with it.
+const AUTOPULL_FILE = path.join(DATA_DIR, 'autopull.json');
+let autoPull = { enabled: false, typeId: '', typeName: '', day: 4, time: '09:00', goLive: true, lastRun: 0, lastResult: '' };
+function loadAutoPull() {
+  try { if (fs.existsSync(AUTOPULL_FILE)) autoPull = { ...autoPull, ...JSON.parse(fs.readFileSync(AUTOPULL_FILE, 'utf8')) }; }
+  catch(e) { console.error('[AutoPull] Load error:', e.message); }
+}
+function saveAutoPull() {
+  try { fs.writeFileSync(AUTOPULL_FILE, JSON.stringify(autoPull, null, 2)); } catch(e) {}
+}
+loadAutoPull();
+
+// Classification — mirrors the editor's manual-load logic
+const AP_POS_MAP = [
+  {keys:['drum','perc'],type:'iem'},
+  {keys:['bass'],type:'iem'},
+  {keys:['guitar','gtr','electric'],type:'iem'},
+  {keys:['keys','keyboard','piano'],type:'iem'},
+  {keys:['vox','vocal','soprano','alto','tenor','lead','co-worship','worship leader'],type:'iem'},
+  {keys:['cg','graphics','propresenter','media'],prod:'cg'},
+  {keys:['camera','cam','video operator'],prod:'cam'},
+  {keys:['foh','front of house','audio: foh','house'],prod:'foh'},
+  {keys:['monitor','iem engineer','audio: monitor'],prod:'mon'},
+  {keys:['light','lighting'],prod:'light'},
+  {keys:['stage','stage hand'],prod:'stage'},
+  {keys:['director','music director','worship pastor','producer'],prod:'dir'},
+  {keys:['stream','shader','broadcast','online'],prod:'stream'},
+];
+const AP_IEM_HINTS = [
+  {person:/drum|perc/, slot:/drum/},
+  {person:/bass/, slot:/bass/},
+  {person:/guitar|gtr|electric|acoustic/, slot:/gtr|guitar/},
+  {person:/keys|keyboard|piano/, slot:/key/},
+  {person:/vox|vocal|soprano|alto|tenor|singer|worship/, slot:/vox/},
+];
+function apClassify(person) {
+  const team = (person.teamName || '').toLowerCase();
+  if (/vocal|vox|singer|band/.test(team)) return { type: 'iem' };
+  const pos = (person.position || person.teamName || '').toLowerCase();
+  for (const rule of AP_POS_MAP) {
+    if (rule.keys.some(k => pos.includes(k))) return rule.prod ? { type: 'prod', sub: rule.prod } : { type: 'iem' };
+  }
+  return { type: 'iem' };
+}
+function apPlaceIem(st, person) {
+  if (!person.name) return;
+  if ([...st.iems, ...st.mics, ...st.prod].some(c => c.name === person.name)) return;
+  const key = ((person.position || '') + ' ' + (person.teamName || '')).toLowerCase();
+  const hint = AP_IEM_HINTS.find(h => h.person.test(key));
+  if (!hint) return;
+  const idx = st.iems.findIndex(c => !c.name && hint.slot.test((c.role || '').toLowerCase()));
+  if (idx === -1) return;
+  const iem = st.iems[idx], mic = st.mics[idx];
+  iem.name = person.name; iem.status = 'active'; if (person.photo) iem.photo = person.photo;
+  if (mic && !mic.name) { mic.name = person.name; mic.status = 'active'; if (person.photo) mic.photo = person.photo; }
+}
+
+// Build a week's board state from a roster, using the current layout as template
+function buildWeekState(planName, roster, ros) {
+  const st = JSON.parse(JSON.stringify(state));
+  st.serviceName = planName;
+  st.iems.forEach(c => { c.name = ''; c.photo = ''; });
+  st.mics.forEach(c => { c.name = ''; c.photo = ''; });
+  st.prod.forEach(p => { p.name = ''; p.photo = ''; });
+  if (ros) st.ros = ros;
+  st.roster = roster.map(p => ({ name: p.name, photo: p.photo || '', position: p.position || '', teamName: p.teamName || '' }));
+  const tags = tagsView();
+  // Saved tags claim their slots first
+  roster.forEach(person => {
+    const tag = tags[person.name];
+    if (!tag) return;
+    if (tag.iemSlot != null) {
+      const iem = st.iems[tag.iemSlot], mic = st.mics[tag.iemSlot];
+      if (iem && !iem.name) { iem.name = person.name; iem.status = 'active'; if (person.photo) iem.photo = person.photo; }
+      if (mic && !mic.name) { mic.name = person.name; mic.status = 'active'; if (person.photo) mic.photo = person.photo; }
+    }
+    if (tag.prodPosition) {
+      const idx = st.prod.findIndex(p => p.position === tag.prodPosition && !p.name);
+      if (idx !== -1) { st.prod[idx].name = person.name; st.prod[idx].status = 'active'; if (person.photo) st.prod[idx].photo = person.photo; }
+    }
+  });
+  // Untagged people are auto-classified and placed
+  roster.filter(p => !tags[p.name]).forEach(person => {
+    const cls = apClassify(person);
+    if (cls.type === 'prod') {
+      const idx = st.prod.findIndex(p => p.position === cls.sub && !p.name);
+      if (idx !== -1) { st.prod[idx].name = person.name; st.prod[idx].status = 'active'; if (person.photo) st.prod[idx].photo = person.photo; }
+    } else {
+      apPlaceIem(st, person);
+    }
+  });
+  applyRulesTo(st);
+  return st;
+}
+
+function playlistSummary() {
+  return { playlist: playlist.map(s => ({ id: s.id, name: s.name, createdAt: s.createdAt, active: s.id === activeServiceId })), activeServiceId };
+}
+
+async function runAutoPull(trigger) {
+  const fail = (msg) => {
+    autoPull.lastResult = 'Error ' + new Date().toLocaleString() + ' — ' + msg;
+    saveAutoPull();
+    console.error('[AutoPull]', msg);
+    return { error: msg };
+  };
+  if (!pcoAccessToken) return fail('Not connected to Planning Center');
+  if (!autoPull.typeId) return fail('No service type configured');
+  try {
+    const plans = await pcoGet(`/services/v2/service_types/${autoPull.typeId}/plans?filter=future&per_page=1&order=sort_date`);
+    const plan = plans.data && plans.data[0];
+    if (!plan) return fail('No upcoming plan found');
+    const planName = String(plan.attributes.dates || plan.attributes.title || plan.id).replace(/,\s*\d{4}\s*$/, '').trim();
+    const { grouped } = await fetchPCORosterGrouped(autoPull.typeId, plan.id);
+    const roster = [];
+    Object.values(grouped).forEach(members => members.forEach(m => roster.push(m)));
+    let ros = null;
+    try {
+      const items = await pcoGet(`/services/v2/service_types/${autoPull.typeId}/plans/${plan.id}/items?per_page=100`);
+      if (items && items.data) ros = items.data.map(it => ({ type: (it.attributes.item_type || 'item').toLowerCase(), title: it.attributes.title || '', length: it.attributes.length || 0 }));
+    } catch(e) { /* run of show is optional */ }
+    const st = buildWeekState(planName, roster, ros);
+    // Upsert the playlist entry by name — re-pulls update, never duplicate
+    let svc = playlist.find(s => s.name === planName);
+    if (svc) svc.state = st;
+    else { svc = { id: 'svc_' + Date.now(), name: planName, createdAt: new Date().toISOString(), state: st }; playlist.push(svc); }
+    if (autoPull.goLive) {
+      state = JSON.parse(JSON.stringify(svc.state));
+      state.serviceName = svc.name;
+      activeServiceId = svc.id;
+      saveStateSoon();
+      broadcast({ type: 'state', payload: state });
+      broadcast({ type: 'went_live', payload: { id: svc.id, name: svc.name } });
+    }
+    savePlaylist();
+    broadcast({ type: 'playlist', payload: playlistSummary() });
+    autoPull.lastRun = Date.now();
+    autoPull.lastResult = `OK ${new Date().toLocaleString()} — "${planName}", ${roster.length} people (${trigger})`;
+    saveAutoPull();
+    console.log('[AutoPull]', autoPull.lastResult);
+    return { ok: true, name: planName, people: roster.length, live: !!autoPull.goLive };
+  } catch(e) {
+    return fail(e.message);
+  }
+}
+
+// Most recent scheduled occurrence (day-of-week + time, local) at or before `now`
+function lastScheduledTime(now) {
+  const [h, m] = String(autoPull.time || '09:00').split(':').map(n => parseInt(n) || 0);
+  const t = new Date(now);
+  t.setHours(h, m, 0, 0);
+  const diff = (t.getDay() - (autoPull.day ?? 4) + 7) % 7;
+  t.setDate(t.getDate() - diff);
+  if (t.getTime() > now) t.setDate(t.getDate() - 7);
+  return t.getTime();
+}
+
+// Fire when the weekly time passes. Also catches up after sleep/relaunch: if
+// the last successful run is older than the most recent scheduled time it is
+// still due, retrying every 30 minutes until it succeeds.
+let _apLastAttempt = 0;
+setInterval(() => {
+  if (!autoPull.enabled) return;
+  const due = lastScheduledTime(Date.now());
+  if ((autoPull.lastRun || 0) >= due) return;
+  if (Date.now() - _apLastAttempt < 30 * 60 * 1000) return;
+  _apLastAttempt = Date.now();
+  runAutoPull('scheduled');
+}, 60 * 1000);
+
+app.get('/api/autopull', (req, res) => {
+  res.json({ ...autoPull, nextRun: autoPull.enabled ? lastScheduledTime(Date.now()) + 7 * 24 * 3600 * 1000 : null });
+});
+app.post('/api/autopull', (req, res) => {
+  const b = req.body || {};
+  autoPull = {
+    ...autoPull,
+    enabled: !!b.enabled,
+    typeId: String(b.typeId || ''),
+    typeName: String(b.typeName || ''),
+    day: Math.min(6, Math.max(0, parseInt(b.day) || 0)),
+    time: /^\d{2}:\d{2}$/.test(b.time) ? b.time : '09:00',
+    goLive: b.goLive !== false
+  };
+  saveAutoPull();
+  console.log(`[AutoPull] Schedule saved: ${autoPull.enabled ? 'on' : 'off'}, day ${autoPull.day} at ${autoPull.time}`);
+  res.json({ ok: true });
+});
+app.post('/api/autopull/run', async (req, res) => res.json(await runAutoPull('manual')));
 
 // App version info
 // Export all data as a single JSON bundle
