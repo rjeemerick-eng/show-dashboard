@@ -882,7 +882,9 @@ function renderShureList() {
   const el = document.getElementById('shure-list'); if (!el) return;
   if (!shureDevs.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">No receivers added.</div>'; return; }
   el.innerHTML = shureDevs.map((d, di) => {
-    const chRows = [1,2,3,4].map(ch => {
+    const isDock = d.kind==='dock';
+    const chN = isDock ? 0 : (d.chCount>=1&&d.chCount<=4 ? d.chCount : 4);
+    const chRows = Array.from({length:chN},(_,k)=>k+1).map(ch => {
       const m = (d.channels||[]).find(c=>c.ch===ch);
       const sel = m ? `${m.slotType}:${m.slotIndex}` : '';
       const live = shureLive[d.id]?.channels?.[ch];
@@ -892,18 +894,22 @@ function renderShureList() {
         <select onchange="setShureMap(${di},${ch},this.value)" style="flex:1;padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s3);color:var(--text);font-size:11px;font-family:inherit">${slotOpts(sel)}</select>
       </div>`;
     }).join('');
+    const modelBadge = d.model ? `<span style="font-size:10px;color:var(--text-dim);white-space:nowrap">${esc(d.model)}${!isDock&&d.chCount?` · ${d.chCount} ch`:''}</span>` : '';
+    const typeSel = isDock ? '' : `<select onchange="shureDevs[${di}].type=this.value" style="padding:5px 8px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s2);color:var(--text);font-size:11px;font-family:inherit">
+          <option value="ulxd"${d.type==='ulxd'?' selected':''}>ULX-D / QLX-D</option>
+          <option value="ad4"${d.type==='ad4'?' selected':''}>Axient Digital</option>
+        </select>`;
+    const dockNote = isDock ? '<div style="font-size:11px;color:var(--text-dim)">Charging dock — no stage channels to map.</div>' : '';
     return `<div style="background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <span id="shure-dot-${d.id}" style="width:7px;height:7px;border-radius:50%;background:#555;flex-shrink:0"></span>
         <input type="text" value="${esc(d.ip||'')}" placeholder="Receiver IP e.g. 192.168.1.50" onchange="shureDevs[${di}].ip=this.value.trim()"
           style="flex:1;padding:5px 9px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s2);color:var(--text);font-size:12px;font-family:inherit">
-        <select onchange="shureDevs[${di}].type=this.value" style="padding:5px 8px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s2);color:var(--text);font-size:11px;font-family:inherit">
-          <option value="ulxd"${d.type==='ulxd'?' selected':''}>ULX-D / QLX-D</option>
-          <option value="ad4"${d.type==='ad4'?' selected':''}>Axient Digital</option>
-        </select>
+        ${modelBadge}
+        ${typeSel}
         <button onclick="shureDevs.splice(${di},1);renderShureList()" style="padding:3px 8px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.1);color:#f87171;cursor:pointer;font-size:11px">×</button>
       </div>
-      ${chRows}
+      ${chRows}${dockNote}
     </div>`;
   }).join('');
 }
@@ -944,24 +950,29 @@ function renderShureScanResults() {
   if (!el || !_shureFound.length) return;
   el.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:6px">Found on the network:</div>' + _shureFound.map((d, i) => {
     const already = shureDevs.some(x => x.ip === d.ip);
+    const isDock = d.kind === 'dock';
     const chans = Object.entries(d.channels || {}).map(([n, nm]) => nm ? `Ch ${n}: ${esc(nm)}` : null).filter(Boolean).join(' · ');
-    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--border-mid);border-radius:8px;background:var(--s3);margin-bottom:6px">
-      <i class="ti ti-antenna" style="color:var(--green);flex-shrink:0"></i>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600">${esc(d.deviceId || d.model || 'Shure receiver')} <span style="color:var(--text-dim);font-weight:400">${esc(d.ip)}${d.model && d.deviceId ? ' · ' + esc(d.model) : ''}</span></div>
-        <div style="font-size:10px;color:var(--text-dim)">${chans || 'No channel names reported'}</div>
-      </div>
-      ${already
+    const sub = isDock ? 'Charging dock — reports no stage channels' : (chans || (d.chCount ? d.chCount + ' channel' + (d.chCount > 1 ? 's' : '') : 'No channel names reported'));
+    const action = isDock
+      ? '<span style="font-size:10px;color:var(--text-dim);flex-shrink:0">Nothing to map</span>'
+      : already
         ? '<span style="font-size:10px;color:#4ade80;flex-shrink:0">✓ Added</span>'
-        : `<button class="btn" style="padding:3px 10px;font-size:11px;flex-shrink:0" onclick="addScannedShure(${i})"><i class="ti ti-plus"></i> Add</button>`}
+        : `<button class="btn" style="padding:3px 10px;font-size:11px;flex-shrink:0" onclick="addScannedShure(${i})"><i class="ti ti-plus"></i> Add</button>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--border-mid);border-radius:8px;background:var(--s3);margin-bottom:6px${isDock ? ';opacity:0.6' : ''}">
+      <i class="ti ${isDock ? 'ti-battery-charging' : 'ti-antenna'}" style="color:${isDock ? 'var(--text-dim)' : 'var(--green)'};flex-shrink:0"></i>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600">${esc(d.deviceId || d.model || 'Shure device')} <span style="color:var(--text-dim);font-weight:400">${esc(d.ip)}${d.model && d.deviceId ? ' · ' + esc(d.model) : ''}</span></div>
+        <div style="font-size:10px;color:var(--text-dim)">${sub}</div>
+      </div>
+      ${action}
     </div>`;
   }).join('');
 }
 
 async function addScannedShure(i) {
   const d = _shureFound[i];
-  if (!d || shureDevs.some(x => x.ip === d.ip)) return;
-  const dev = { id: 'shure_' + Date.now(), ip: d.ip, port: 2202, type: 'ulxd', channels: [] };
+  if (!d || d.kind === 'dock' || shureDevs.some(x => x.ip === d.ip)) return;
+  const dev = { id: 'shure_' + Date.now(), ip: d.ip, port: 2202, type: /^AD/i.test(d.model||'') ? 'ad4' : 'ulxd', channels: [], model: d.model || null, kind: d.kind || 'receiver', chCount: d.chCount || null };
   // Best effort: auto-map channels whose receiver name matches a slot's role
   // label ("Vox 1" on the receiver -> the Vox 1 slot). Mic slots first —
   // receivers carry mics; IEM packs have no return channel.
@@ -1429,7 +1440,9 @@ function shureChannelOpts(type, ch) {
   let opts = '<option value="">— none —</option>';
   if (!shureDevs.length) return opts + '<option value="" disabled>Add receivers in Settings → Integrations</option>';
   shureDevs.forEach(d => {
-    [1,2,3,4].forEach(n => {
+    if (d.kind === 'dock') return; // charging docks have no stage channels
+    const chN = (d.chCount>=1&&d.chCount<=4) ? d.chCount : 4;
+    Array.from({length:chN},(_,k)=>k+1).forEach(n => {
       const live = shureLive[d.id]?.channels?.[n];
       const nm = live?.chanName ? live.chanName : 'Ch '+n;
       const mapped = (d.channels||[]).find(c=>c.ch===n);
