@@ -262,9 +262,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Poll ULX-D / QLX-D / Axient Digital receivers on the network for transmitter battery. Battery shows on the board and turns the dot amber when low. (PSM1000 packs have no return channel and can't report battery.)</div>
         <div id="shure-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
         <div style="display:flex;gap:8px">
-          <button class="btn" onclick="addShureDevice()"><i class="ti ti-plus"></i> Add receiver</button>
+          <button class="btn" id="shure-scan-btn" onclick="scanShure()"><i class="ti ti-radar-2"></i> Scan network</button>
+          <button class="btn" onclick="addShureDevice()"><i class="ti ti-plus"></i> Add manually</button>
           <button class="btn success" onclick="saveShureDevices()"><i class="ti ti-check"></i> Save &amp; start polling</button>
         </div>
+        <div id="shure-scan-results" style="margin-top:10px"></div>
       </div>
 
       
@@ -916,6 +918,69 @@ function setShureMap(di, ch, val) {
 function addShureDevice() {
   shureDevs.push({ id:'shure_'+Date.now(), ip:'', port:2202, type:'ulxd', channels:[] });
   renderShureList();
+}
+
+// ── Shure network scan ─────────────────────────────────────────────────────────
+let _shureFound = [];
+async function scanShure() {
+  const el = document.getElementById('shure-scan-results');
+  const btn = document.getElementById('shure-scan-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Scanning…'; }
+  el.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">Sweeping the local network for Shure receivers — a few seconds…</div>';
+  try {
+    const r = await fetch('/api/shure-scan', { method: 'POST' }).then(res => res.json());
+    if (r.error) throw new Error(r.error);
+    _shureFound = r.found || [];
+    renderShureScanResults();
+    if (!_shureFound.length) el.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">No Shure receivers found. They need to be on this network with their network control port reachable (same subnet).</div>';
+  } catch (e) {
+    el.innerHTML = `<div style="font-size:12px;color:#f87171">Scan failed: ${esc(e.message)}</div>`;
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-radar-2"></i> Scan network'; }
+}
+
+function renderShureScanResults() {
+  const el = document.getElementById('shure-scan-results');
+  if (!el || !_shureFound.length) return;
+  el.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:6px">Found on the network:</div>' + _shureFound.map((d, i) => {
+    const already = shureDevs.some(x => x.ip === d.ip);
+    const chans = Object.entries(d.channels || {}).map(([n, nm]) => nm ? `Ch ${n}: ${esc(nm)}` : null).filter(Boolean).join(' · ');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--border-mid);border-radius:8px;background:var(--s3);margin-bottom:6px">
+      <i class="ti ti-antenna" style="color:var(--green);flex-shrink:0"></i>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600">${esc(d.deviceId || d.model || 'Shure receiver')} <span style="color:var(--text-dim);font-weight:400">${esc(d.ip)}${d.model && d.deviceId ? ' · ' + esc(d.model) : ''}</span></div>
+        <div style="font-size:10px;color:var(--text-dim)">${chans || 'No channel names reported'}</div>
+      </div>
+      ${already
+        ? '<span style="font-size:10px;color:#4ade80;flex-shrink:0">✓ Added</span>'
+        : `<button class="btn" style="padding:3px 10px;font-size:11px;flex-shrink:0" onclick="addScannedShure(${i})"><i class="ti ti-plus"></i> Add</button>`}
+    </div>`;
+  }).join('');
+}
+
+async function addScannedShure(i) {
+  const d = _shureFound[i];
+  if (!d || shureDevs.some(x => x.ip === d.ip)) return;
+  const dev = { id: 'shure_' + Date.now(), ip: d.ip, port: 2202, type: 'ulxd', channels: [] };
+  // Best effort: auto-map channels whose receiver name matches a slot's role
+  // label ("Vox 1" on the receiver -> the Vox 1 slot). Mic slots first —
+  // receivers carry mics; IEM packs have no return channel.
+  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const takenMic = new Set(), takenIem = new Set();
+  shureDevs.forEach(x => (x.channels || []).forEach(c => (c.slotType === 'mic' ? takenMic : takenIem).add(c.slotIndex)));
+  Object.entries(d.channels || {}).forEach(([n, nm]) => {
+    if (!nm) return;
+    const micIdx = state.mics.findIndex((c, idx) => norm(c.role) === norm(nm) && !takenMic.has(idx));
+    if (micIdx !== -1) { dev.channels.push({ ch: parseInt(n), slotType: 'mic', slotIndex: micIdx }); takenMic.add(micIdx); return; }
+    const iemIdx = state.iems.findIndex((c, idx) => norm(c.role) === norm(nm) && !takenIem.has(idx));
+    if (iemIdx !== -1) { dev.channels.push({ ch: parseInt(n), slotType: 'iem', slotIndex: iemIdx }); takenIem.add(iemIdx); }
+  });
+  shureDevs.push(dev);
+  renderShureList();
+  renderShureScanResults();
+  await fetch('/api/shure-devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(shureDevs.filter(x => x.ip)) });
+  toast(`<i class="ti ti-antenna"></i> ${esc(d.deviceId || d.ip)} added${dev.channels.length ? ` — ${dev.channels.length} channel${dev.channels.length > 1 ? 's' : ''} auto-mapped by name` : ''}`);
+  setTimeout(refreshShureStatus, 2500);
 }
 async function saveShureDevices() {
   const valid = shureDevs.filter(d=>d.ip);

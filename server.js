@@ -1189,6 +1189,79 @@ app.post('/api/shure-devices', (req, res) => {
 });
 app.get('/api/shure-status', (req, res) => res.json(shureStatus));
 
+// ─── Shure network discovery ──────────────────────────────────────────────────
+// Probe one host: does anything on TCP 2202 answer Shure Command Strings?
+// Identified devices report DEVICE_ID / MODEL / channel names.
+function probeShure(ip, port = 2202, timeout = 500) {
+  return new Promise(resolve => {
+    const sock = new net.Socket();
+    let buf = '';
+    let settled = false;
+    let replyTimer = null;
+    const done = (found) => {
+      if (settled) return;
+      settled = true;
+      if (replyTimer) clearTimeout(replyTimer);
+      sock.destroy();
+      resolve(found);
+    };
+    const parse = () => {
+      if (!buf.includes('< REP')) return null;
+      const dev = { ip, channels: {} };
+      const id = buf.match(/< REP DEVICE_ID \{(.*?)\} >/);
+      if (id) dev.deviceId = id[1].trim();
+      const model = buf.match(/< REP MODEL \{(.*?)\} >/);
+      if (model) dev.model = model[1].trim();
+      const rn = /< REP (\d) CHAN_NAME \{(.*?)\} >/g;
+      let m; while ((m = rn.exec(buf)) !== null) dev.channels[m[1]] = m[2].trim();
+      return dev;
+    };
+    sock.setTimeout(timeout);
+    sock.on('connect', () => {
+      sock.write('< GET DEVICE_ID >< GET MODEL >< GET 1 CHAN_NAME >< GET 2 CHAN_NAME >< GET 3 CHAN_NAME >< GET 4 CHAN_NAME >');
+      replyTimer = setTimeout(() => done(parse()), 400); // collect replies briefly
+    });
+    sock.on('data', d => { buf += d.toString(); });
+    sock.on('timeout', () => done(parse()));
+    sock.on('error', () => done(null));
+    sock.connect(port, ip);
+  });
+}
+
+function localSubnets() {
+  const nets = os.networkInterfaces();
+  const subnets = new Set();
+  Object.values(nets).forEach(list => (list || []).forEach(n => {
+    if (n.family === 'IPv4' && !n.internal) subnets.add(n.address.split('.').slice(0, 3).join('.'));
+  }));
+  return [...subnets];
+}
+
+// Sweep the local /24 subnet(s) for Shure receivers. ~48 probes in flight at
+// a time; a full /24 takes a few seconds.
+let _shureScanRunning = false;
+app.post('/api/shure-scan', async (req, res) => {
+  if (_shureScanRunning) return res.status(409).json({ error: 'A scan is already running' });
+  _shureScanRunning = true;
+  try {
+    const subnets = localSubnets();
+    const ips = [];
+    subnets.forEach(s => { for (let i = 1; i <= 254; i++) ips.push(s + '.' + i); });
+    const found = [];
+    const BATCH = 48;
+    for (let i = 0; i < ips.length; i += BATCH) {
+      const results = await Promise.all(ips.slice(i, i + BATCH).map(ip => probeShure(ip)));
+      results.forEach(r => { if (r) found.push(r); });
+    }
+    console.log(`[Shure] Scan complete: ${found.length} device(s) across ${subnets.map(s => s + '.x').join(', ')}`);
+    res.json({ found, scanned: ips.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  } finally {
+    _shureScanRunning = false;
+  }
+});
+
 // Connection info for remote access (stable .local hostname + LAN IPs)
 app.get('/api/connect-info', (req, res) => {
   const os = require('os');
