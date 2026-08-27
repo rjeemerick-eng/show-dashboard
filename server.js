@@ -1087,7 +1087,14 @@ let shureDevices = []; // [{id, ip, port, type, channels:[{ch, slotType:'iem'|'m
 let shureStatus = {};  // id -> {ok, lastSeen, error}
 
 function loadShureDevices() {
-  try { if (fs.existsSync(SHURE_FILE)) shureDevices = JSON.parse(fs.readFileSync(SHURE_FILE,'utf8')); }
+  try {
+    if (fs.existsSync(SHURE_FILE)) shureDevices = JSON.parse(fs.readFileSync(SHURE_FILE,'utf8'));
+    // Re-derive kind from the stored model — classification rules improve
+    // over time and saved devices must pick that up (e.g. SBRC docks)
+    shureDevices.forEach(d => {
+      if (d.model) { const k = shureModelInfo(d.model).kind; if (k !== 'unknown') d.kind = k; }
+    });
+  }
   catch(e) { console.error('[Shure] Load error:', e.message); }
 }
 function saveShureDevices() {
@@ -1101,7 +1108,7 @@ loadShureDevices();
 function shureModelInfo(model) {
   const m = String(model || '').toUpperCase();
   if (!m) return { kind: 'unknown', channels: null };
-  if (/SBC|CHARG/.test(m)) return { kind: 'dock', channels: 0 };      // charging station — nothing to map
+  if (/^SB|CHARG/.test(m)) return { kind: 'dock', channels: 0 };      // SBC / SBRC chargers — nothing to map
   if (/P10T|PSM/.test(m))  return { kind: 'iem-tx', channels: 2 };    // IEM transmitter — names only, no battery
   if (/4Q|AD4Q/.test(m))   return { kind: 'receiver', channels: 4 };
   if (/4D|AD4D/.test(m))   return { kind: 'receiver', channels: 2 };
@@ -1113,6 +1120,7 @@ function pollShureDevice(dev) {
   return new Promise(resolve => {
     const results = {}; // ch -> {bars, chanName}
     let model = null;
+    let deviceId = null;
     let buf = '';
     let endTimer = null;
     let settled = false;
@@ -1143,12 +1151,14 @@ function pollShureDevice(dev) {
       }
       const mm = buf.match(/< REP MODEL \{(.*?)\} >/);
       if (mm) model = mm[1].trim();
+      const di = buf.match(/< REP DEVICE_ID \{(.*?)\} >/);
+      if (di) deviceId = di[1].trim();
     });
-    sock.on('timeout', () => { sock.destroy(); finish({ ok:false, error:'timeout', results, model }); });
-    sock.on('error', err => { sock.destroy(); finish({ ok:false, error: err.code || err.message, results, model }); });
-    sock.on('close', () => finish({ ok:true, results, model }));
+    sock.on('timeout', () => { sock.destroy(); finish({ ok:false, error:'timeout', results, model, deviceId }); });
+    sock.on('error', err => { sock.destroy(); finish({ ok:false, error: err.code || err.message, results, model, deviceId }); });
+    sock.on('close', () => finish({ ok:true, results, model, deviceId }));
     sock.connect(dev.port || 2202, dev.ip, () => {
-      sock.write('< GET MODEL >');
+      sock.write('< GET MODEL >< GET DEVICE_ID >');
       // Only query channels the device is known to have (all 4 until learned)
       const n = (dev.chCount >= 1 && dev.chCount <= 4) ? dev.chCount : 4;
       for (let ch = 1; ch <= n; ch++) {
@@ -1183,15 +1193,19 @@ async function pollShureCycle() {
     // Self-identify: learn the model and which channels actually answered, so
     // the UI can show only what the device really has (a dual receiver shows
     // 2 channels; a charging dock stops being offered as a 4-channel mic rig)
-    if (r.model && dev.model !== r.model) {
-      dev.model = r.model;
-      dev.kind = shureModelInfo(r.model).kind;
-      devsChanged = true;
-      if (dev.kind === 'dock') { console.log(`[Shure] ${dev.ip} identified as charging dock (${r.model}) — not pollable`); continue; }
+    if (r.model) {
+      const k = shureModelInfo(r.model).kind;
+      if (dev.model !== r.model || (k !== 'unknown' && dev.kind !== k)) {
+        dev.model = r.model;
+        if (k !== 'unknown') dev.kind = k;
+        devsChanged = true;
+        if (dev.kind === 'dock') { console.log(`[Shure] ${dev.ip} identified as charging dock (${r.model}) — not pollable`); continue; }
+      }
     }
+    if (r.deviceId && dev.deviceId !== r.deviceId) { dev.deviceId = r.deviceId; devsChanged = true; }
     const answered = Object.keys(r.results).length;
     if (r.ok && answered && dev.chCount !== answered) { dev.chCount = answered; devsChanged = true; }
-    shureStatus[dev.id] = { ok: r.ok && answered > 0, lastSeen: r.ok ? Date.now() : (shureStatus[dev.id]?.lastSeen || null), error: r.error || null, channels: r.results, model: dev.model || null, kind: dev.kind || 'receiver', chCount: dev.chCount || null };
+    shureStatus[dev.id] = { ok: r.ok && answered > 0, lastSeen: r.ok ? Date.now() : (shureStatus[dev.id]?.lastSeen || null), error: r.error || null, channels: r.results, model: dev.model || null, deviceId: dev.deviceId || null, kind: dev.kind || 'receiver', chCount: dev.chCount || null };
     (dev.channels||[]).forEach(c => {
       const res = r.results[c.ch];
       if (!res) return;
@@ -1215,7 +1229,7 @@ setInterval(pollAllShure, 5000);
 app.get('/api/shure-devices', (req, res) => res.json(shureDevices));
 app.post('/api/shure-devices', (req, res) => {
   if (!Array.isArray(req.body)) return res.status(400).json({ error: 'array required' });
-  shureDevices = req.body.map((d,i) => ({ id: d.id || 'shure_'+Date.now()+'_'+i, ip: d.ip, port: d.port||2202, type: d.type||'ulxd', channels: d.channels||[], model: d.model||null, kind: d.kind||null, chCount: d.chCount||null }));
+  shureDevices = req.body.map((d,i) => ({ id: d.id || 'shure_'+Date.now()+'_'+i, ip: d.ip, port: d.port||2202, type: d.type||'ulxd', channels: d.channels||[], model: d.model||null, deviceId: d.deviceId||null, kind: d.kind||null, chCount: d.chCount||null }));
   saveShureDevices();
   shureStatus = {};
   pollAllShure();

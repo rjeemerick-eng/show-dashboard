@@ -894,7 +894,8 @@ function renderShureList() {
         <select onchange="setShureMap(${di},${ch},this.value)" style="flex:1;padding:4px 8px;border:1px solid var(--border-mid);border-radius:5px;background:var(--s3);color:var(--text);font-size:11px;font-family:inherit">${slotOpts(sel)}</select>
       </div>`;
     }).join('');
-    const modelBadge = d.model ? `<span style="font-size:10px;color:var(--text-dim);white-space:nowrap">${esc(d.model)}${!isDock&&d.chCount?` · ${d.chCount} ch`:''}</span>` : '';
+    const devLabel = [d.deviceId, d.model].filter(Boolean).join(' · ');
+    const modelBadge = devLabel ? `<span style="font-size:10px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">${esc(devLabel)}${!isDock&&d.chCount?` · ${d.chCount} ch`:''}</span>` : '';
     const typeSel = isDock ? '' : `<select onchange="shureDevs[${di}].type=this.value" style="padding:5px 8px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s2);color:var(--text);font-size:11px;font-family:inherit">
           <option value="ulxd"${d.type==='ulxd'?' selected':''}>ULX-D / QLX-D</option>
           <option value="ad4"${d.type==='ad4'?' selected':''}>Axient Digital</option>
@@ -972,7 +973,7 @@ function renderShureScanResults() {
 async function addScannedShure(i) {
   const d = _shureFound[i];
   if (!d || d.kind === 'dock' || shureDevs.some(x => x.ip === d.ip)) return;
-  const dev = { id: 'shure_' + Date.now(), ip: d.ip, port: 2202, type: /^AD/i.test(d.model||'') ? 'ad4' : 'ulxd', channels: [], model: d.model || null, kind: d.kind || 'receiver', chCount: d.chCount || null };
+  const dev = { id: 'shure_' + Date.now(), ip: d.ip, port: 2202, type: /^AD/i.test(d.model||'') ? 'ad4' : 'ulxd', channels: [], model: d.model || null, deviceId: d.deviceId || null, kind: d.kind || 'receiver', chCount: d.chCount || null };
   // Best effort: auto-map channels whose receiver name matches a slot's role
   // label ("Vox 1" on the receiver -> the Vox 1 slot). Mic slots first —
   // receivers carry mics; IEM packs have no return channel.
@@ -1410,7 +1411,9 @@ function renderList(type){
   } else {
     arr.forEach((ch,i)=>{
       const isExp=expandedRow&&expandedRow.type===type&&expandedRow.id===ch.id;
-      const dotCls=ch.status==='active'?'on':ch.bat!==null&&ch.bat<30?'warn':'off';
+      // Battery may live on the paired mic slot (wireless channels map there)
+      const bat=ch.bat!=null?ch.bat:(type==='iem'?(state.mics[i]?.bat??null):null);
+      const dotCls=ch.status==='active'?'on':bat!==null&&bat<30?'warn':'off';
       const tagIcon=savedTags[ch.name]?'tagged':'';
       html+=`<div class="assign-row ${type==='iem'?'iem-row':'mic-row'}" onclick="toggleExpand('${type}','${ch.id}')" style="cursor:pointer">
         <div class="row-ch">${ch.ch}</div>

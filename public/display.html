@@ -217,10 +217,14 @@ function tick(){
 }
 tick(); setInterval(tick,10000);
 
-function makeIemRow(ch){
+function makeIemRow(ch,mic){
   const hasName=ch.name&&ch.name.trim();
   const on=hasName||(ch.status==='active');
-  const dotCls=!hasName?'off':(ch.bat!==null&&ch.bat<30)?'warn':'on';
+  // Battery/labels come from whichever slot the wireless channel is mapped to —
+  // usually the paired MIC slot, since IEM packs have no return channel
+  const bat=(ch.bat!=null)?ch.bat:(mic&&mic.bat!=null?mic.bat:null);
+  const wwb=ch.wwbName||(mic&&mic.wwbName)||'';
+  const dotCls=!hasName?'off':(bat!==null&&bat<30)?'warn':'on';
   const col=colorFor(ch.name||ch.role);
   const av=hasName
     ?(ch.photo?`<img src="${esc(ch.photo)}" alt="${esc(ch.name)}" onerror="this.style.display='none'">`:esc(initials(ch.name)))
@@ -228,11 +232,11 @@ function makeIemRow(ch){
   const avatarEl=hasName
     ?`<div class="avatar-circle" style="background:${col};width:36px;height:36px;font-size:11px">${av}</div>`
     :`<div style="width:36px;height:36px;flex-shrink:0"></div>`;
-  const batEl = (ch.bat!==null&&ch.bat!==undefined)
-    ? `<div class="bat ${ch.bat<20?'bat-red':ch.bat<40?'bat-amber':'bat-green'}"><span class="bat-body"><span class="bat-fill" style="width:${Math.max(6,ch.bat)}%"></span></span>${ch.bat}%</div>`
+  const batEl = (bat!==null&&bat!==undefined)
+    ? `<div class="bat ${bat<20?'bat-red':bat<40?'bat-amber':'bat-green'}"><span class="bat-body"><span class="bat-fill" style="width:${Math.max(6,bat)}%"></span></span>${bat}%</div>`
     : `<div></div>`;
   return `<div class="person-row iem-row${on?'':' na'}">
-    <div class="pack-num">${ch.wwbName?`<div>${ch.ch}</div><div class="wwb-name">${esc(ch.wwbName)}</div>`:ch.ch}</div>
+    <div class="pack-num">${wwb?`<div>${ch.ch}</div><div class="wwb-name">${esc(wwb)}</div>`:ch.ch}</div>
     ${avatarEl}
     <div class="cell-name" style="color:var(--text);font-weight:900">${esc(ch.name)||'—'}</div>
     <div class="cell-role" style="color:var(--text-mid);font-weight:700"><div class="s-dot ${dotCls}"></div>${esc(ch.role)}</div>
@@ -320,7 +324,7 @@ function render(s){
   const activeIem=s.iems.filter(c=>c.status==='active').length;
   const activeProd=s.prod.filter(c=>c.status==='active'&&!c.hidden).length;
   document.getElementById('iem-ct').textContent=`${activeIem} of ${s.iems.length} active`;
-  document.getElementById('iem-list').innerHTML=s.iems.map(makeIemRow).join('');
+  document.getElementById('iem-list').innerHTML=s.iems.map((c,i)=>makeIemRow(c,(s.mics||[])[i])).join('');
 
   // View configuration: zone split + right zone content
   const v = s.view || { split: 50, rightZone: 'crew' };
