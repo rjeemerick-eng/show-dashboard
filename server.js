@@ -830,19 +830,36 @@ app.get('/api/playlist/:id/preview', (req, res) => {
   res.json(svc.state);
 });
 
-// ─── Automatic weekly PCO pull ────────────────────────────────────────────────
-// On a schedule (or the "Run now" button), pull the next upcoming plan for the
-// configured service type, build the board exactly like a manual editor load
-// (tags first, then auto-classification, then conflict rules), save it as a
-// playlist entry named after the plan date, and optionally go live with it.
+// ─── Automatic weekly PCO pulls ───────────────────────────────────────────────
+// A LIST of independent schedules, each bound to one PCO service type with its
+// own day/time and go-live choice ("Sunday Service" pulls Thursday 9am,
+// "Wednesday Night" pulls Monday, ...). Each fires weekly, pulls that type's
+// next upcoming plan, builds the board exactly like a manual editor load
+// (tags first, then auto-classification, then conflict rules), saves it as a
+// playlist entry named after the plan date, and optionally goes live with it.
+// Two schedules on the same type act as pull-then-refresh: re-pulls update
+// the same playlist entry.
 const AUTOPULL_FILE = path.join(DATA_DIR, 'autopull.json');
-let autoPull = { enabled: false, typeId: '', typeName: '', day: 4, time: '09:00', goLive: true, lastRun: 0, lastResult: '' };
+let autoPulls = []; // [{id, enabled, typeId, typeName, day, time, goLive, lastRun, lastResult}]
 function loadAutoPull() {
-  try { if (fs.existsSync(AUTOPULL_FILE)) autoPull = { ...autoPull, ...JSON.parse(fs.readFileSync(AUTOPULL_FILE, 'utf8')) }; }
-  catch(e) { console.error('[AutoPull] Load error:', e.message); }
+  try {
+    if (!fs.existsSync(AUTOPULL_FILE)) return;
+    const data = JSON.parse(fs.readFileSync(AUTOPULL_FILE, 'utf8'));
+    if (Array.isArray(data)) autoPulls = data;
+    else if (Array.isArray(data.schedules)) autoPulls = data.schedules;
+    else if (data && typeof data === 'object' && (data.typeId || data.enabled)) {
+      // migrate the old single-schedule format
+      autoPulls = [{ id: 'ap_1', enabled: !!data.enabled, typeId: data.typeId || '', typeName: data.typeName || '',
+        day: data.day ?? 4, time: data.time || '09:00', goLive: data.goLive !== false,
+        lastRun: data.lastRun || 0, lastResult: data.lastResult || '' }];
+      saveAutoPull();
+      console.log('[AutoPull] Migrated single schedule to schedule list');
+    }
+  } catch(e) { console.error('[AutoPull] Load error:', e.message); }
 }
 function saveAutoPull() {
-  try { fs.writeFileSync(AUTOPULL_FILE, JSON.stringify(autoPull, null, 2)); } catch(e) {}
+  // _lastAttempt is in-memory retry state, not config
+  try { fs.writeFileSync(AUTOPULL_FILE, JSON.stringify({ schedules: autoPulls.map(({ _lastAttempt, ...s }) => s) }, null, 2)); } catch(e) {}
 }
 loadAutoPull();
 
@@ -933,26 +950,26 @@ function playlistSummary() {
   return { playlist: playlist.map(s => ({ id: s.id, name: s.name, createdAt: s.createdAt, active: s.id === activeServiceId })), activeServiceId };
 }
 
-async function runAutoPull(trigger) {
+async function runAutoPull(sched, trigger) {
   const fail = (msg) => {
-    autoPull.lastResult = 'Error ' + new Date().toLocaleString() + ' — ' + msg;
+    sched.lastResult = 'Error ' + new Date().toLocaleString() + ' — ' + msg;
     saveAutoPull();
-    console.error('[AutoPull]', msg);
+    console.error(`[AutoPull] ${sched.typeName || sched.id}:`, msg);
     return { error: msg };
   };
   if (!pcoAccessToken) return fail('Not connected to Planning Center');
-  if (!autoPull.typeId) return fail('No service type configured');
+  if (!sched.typeId) return fail('No service type configured');
   try {
-    const plans = await pcoGet(`/services/v2/service_types/${autoPull.typeId}/plans?filter=future&per_page=1&order=sort_date`);
+    const plans = await pcoGet(`/services/v2/service_types/${sched.typeId}/plans?filter=future&per_page=1&order=sort_date`);
     const plan = plans.data && plans.data[0];
     if (!plan) return fail('No upcoming plan found');
     const planName = String(plan.attributes.dates || plan.attributes.title || plan.id).replace(/,\s*\d{4}\s*$/, '').trim();
-    const { grouped } = await fetchPCORosterGrouped(autoPull.typeId, plan.id);
+    const { grouped } = await fetchPCORosterGrouped(sched.typeId, plan.id);
     const roster = [];
     Object.values(grouped).forEach(members => members.forEach(m => roster.push(m)));
     let ros = null;
     try {
-      const items = await pcoGet(`/services/v2/service_types/${autoPull.typeId}/plans/${plan.id}/items?per_page=100`);
+      const items = await pcoGet(`/services/v2/service_types/${sched.typeId}/plans/${plan.id}/items?per_page=100`);
       if (items && items.data) ros = items.data.map(it => ({ type: (it.attributes.item_type || 'item').toLowerCase(), title: it.attributes.title || '', length: it.attributes.length || 0 }));
     } catch(e) { /* run of show is optional */ }
     const st = buildWeekState(planName, roster, ros);
@@ -960,7 +977,7 @@ async function runAutoPull(trigger) {
     let svc = playlist.find(s => s.name === planName);
     if (svc) svc.state = st;
     else { svc = { id: 'svc_' + Date.now(), name: planName, createdAt: new Date().toISOString(), state: st }; playlist.push(svc); }
-    if (autoPull.goLive) {
+    if (sched.goLive) {
       state = JSON.parse(JSON.stringify(svc.state));
       state.serviceName = svc.name;
       activeServiceId = svc.id;
@@ -970,59 +987,86 @@ async function runAutoPull(trigger) {
     }
     savePlaylist();
     broadcast({ type: 'playlist', payload: playlistSummary() });
-    autoPull.lastRun = Date.now();
-    autoPull.lastResult = `OK ${new Date().toLocaleString()} — "${planName}", ${roster.length} people (${trigger})`;
+    sched.lastRun = Date.now();
+    sched.lastResult = `OK ${new Date().toLocaleString()} — "${planName}", ${roster.length} people (${trigger})`;
     saveAutoPull();
-    console.log('[AutoPull]', autoPull.lastResult);
-    return { ok: true, name: planName, people: roster.length, live: !!autoPull.goLive };
+    console.log(`[AutoPull] ${sched.typeName || sched.id}:`, sched.lastResult);
+    return { ok: true, name: planName, people: roster.length, live: !!sched.goLive };
   } catch(e) {
     return fail(e.message);
   }
 }
 
-// Most recent scheduled occurrence (day-of-week + time, local) at or before `now`
-function lastScheduledTime(now) {
-  const [h, m] = String(autoPull.time || '09:00').split(':').map(n => parseInt(n) || 0);
+// Serialize runs — two schedules due at the same minute execute one at a time
+// so their playlist writes and go-lives can't interleave
+let _apChain = Promise.resolve();
+function queueAutoPull(sched, trigger) {
+  const p = _apChain.then(() => runAutoPull(sched, trigger));
+  _apChain = p.catch(() => {});
+  return p;
+}
+
+// Most recent scheduled occurrence of a schedule (day-of-week + time, local)
+// at or before `now`
+function lastScheduledTime(sched, now) {
+  const [h, m] = String(sched.time || '09:00').split(':').map(n => parseInt(n) || 0);
   const t = new Date(now);
   t.setHours(h, m, 0, 0);
-  const diff = (t.getDay() - (autoPull.day ?? 4) + 7) % 7;
+  const diff = (t.getDay() - (sched.day ?? 4) + 7) % 7;
   t.setDate(t.getDate() - diff);
   if (t.getTime() > now) t.setDate(t.getDate() - 7);
   return t.getTime();
 }
 
-// Fire when the weekly time passes. Also catches up after sleep/relaunch: if
-// the last successful run is older than the most recent scheduled time it is
-// still due, retrying every 30 minutes until it succeeds.
-let _apLastAttempt = 0;
+// Fire each schedule when its weekly time passes. Also catches up after
+// sleep/relaunch: a schedule whose last successful run is older than its most
+// recent scheduled time is still due, retrying every 30 minutes until it
+// succeeds.
 setInterval(() => {
-  if (!autoPull.enabled) return;
-  const due = lastScheduledTime(Date.now());
-  if ((autoPull.lastRun || 0) >= due) return;
-  if (Date.now() - _apLastAttempt < 30 * 60 * 1000) return;
-  _apLastAttempt = Date.now();
-  runAutoPull('scheduled');
+  const now = Date.now();
+  autoPulls.forEach(sched => {
+    if (!sched.enabled) return;
+    const due = lastScheduledTime(sched, now);
+    if ((sched.lastRun || 0) >= due) return;
+    if (now - (sched._lastAttempt || 0) < 30 * 60 * 1000) return;
+    sched._lastAttempt = now;
+    queueAutoPull(sched, 'scheduled');
+  });
 }, 60 * 1000);
 
 app.get('/api/autopull', (req, res) => {
-  res.json({ ...autoPull, nextRun: autoPull.enabled ? lastScheduledTime(Date.now()) + 7 * 24 * 3600 * 1000 : null });
+  res.json({ schedules: autoPulls.map(({ _lastAttempt, ...s }) => ({
+    ...s,
+    nextRun: s.enabled ? lastScheduledTime(s, Date.now()) + 7 * 24 * 3600 * 1000 : null
+  })) });
 });
 app.post('/api/autopull', (req, res) => {
-  const b = req.body || {};
-  autoPull = {
-    ...autoPull,
-    enabled: !!b.enabled,
-    typeId: String(b.typeId || ''),
-    typeName: String(b.typeName || ''),
-    day: Math.min(6, Math.max(0, parseInt(b.day) || 0)),
-    time: /^\d{2}:\d{2}$/.test(b.time) ? b.time : '09:00',
-    goLive: b.goLive !== false
-  };
+  const list = req.body && Array.isArray(req.body.schedules) ? req.body.schedules : null;
+  if (!list) return res.status(400).json({ error: 'schedules array required' });
+  autoPulls = list.map((b, i) => {
+    const prev = autoPulls.find(s => s.id === b.id);
+    return {
+      id: b.id || 'ap_' + Date.now() + '_' + i,
+      enabled: !!b.enabled,
+      typeId: String(b.typeId || ''),
+      typeName: String(b.typeName || ''),
+      day: Math.min(6, Math.max(0, parseInt(b.day) || 0)),
+      time: /^\d{2}:\d{2}$/.test(b.time) ? b.time : '09:00',
+      goLive: b.goLive !== false,
+      // run history survives edits to the same schedule
+      lastRun: prev ? prev.lastRun : 0,
+      lastResult: prev ? prev.lastResult : ''
+    };
+  });
   saveAutoPull();
-  console.log(`[AutoPull] Schedule saved: ${autoPull.enabled ? 'on' : 'off'}, day ${autoPull.day} at ${autoPull.time}`);
-  res.json({ ok: true });
+  console.log(`[AutoPull] ${autoPulls.length} schedule(s) saved (${autoPulls.filter(s => s.enabled).length} enabled)`);
+  res.json({ ok: true, count: autoPulls.length });
 });
-app.post('/api/autopull/run', async (req, res) => res.json(await runAutoPull('manual')));
+app.post('/api/autopull/run', async (req, res) => {
+  const sched = autoPulls.find(s => s.id === (req.body && req.body.id)) || autoPulls[0];
+  if (!sched) return res.status(404).json({ error: 'No schedule to run — add one first' });
+  res.json(await queueAutoPull(sched, 'manual'));
+});
 
 // App version info
 // Export all data as a single JSON bundle
