@@ -1116,133 +1116,157 @@ function shureModelInfo(model) {
   return { kind: 'receiver', channels: null };
 }
 
-function pollShureDevice(dev) {
-  return new Promise(resolve => {
-    const results = {}; // ch -> {bars, chanName}
-    let model = null;
-    let deviceId = null;
-    let buf = '';
-    let endTimer = null;
-    let settled = false;
-    const finish = (r) => {
-      if (settled) return;
-      settled = true;
-      if (endTimer) { clearTimeout(endTimer); endTimer = null; }
-      resolve(r);
-    };
-    const sock = new net.Socket();
-    sock.setTimeout(2500);
-    sock.on('data', d => {
-      // Replies stream in arbitrary chunks; accumulate and re-scan the whole
-      // buffer so a REP split across packets is picked up once complete.
-      // Channels the receiver doesn't have answer with error REPs that simply
-      // don't match these patterns — harmless.
-      buf += d.toString();
-      let m;
-      const re = /< REP (\d) BATT_BARS (\d+) >/g;          // ULX-D / QLX-D / SLX-D
-      while ((m = re.exec(buf)) !== null) {
-        results[parseInt(m[1])] = results[parseInt(m[1])] || {};
-        results[parseInt(m[1])].bars = parseInt(m[2]);
-      }
-      const rtx = /< REP (\d) TX_BATT_BARS (\d+) >/g;      // Axient Digital
-      while ((m = rtx.exec(buf)) !== null) {
-        results[parseInt(m[1])] = results[parseInt(m[1])] || {};
-        results[parseInt(m[1])].bars = parseInt(m[2]);
-      }
-      const rn = /< REP (\d) CHAN_NAME \{(.*?)\} >/g;
-      while ((m = rn.exec(buf)) !== null) {
-        results[parseInt(m[1])] = results[parseInt(m[1])] || {};
-        results[parseInt(m[1])].chanName = m[2].trim();
-      }
-      const rf = /< REP (\d) FREQUENCY (\d+) >/g;          // kHz -> "518.225"
-      while ((m = rf.exec(buf)) !== null) {
-        results[parseInt(m[1])] = results[parseInt(m[1])] || {};
-        results[parseInt(m[1])].freq = (parseInt(m[2]) / 1000).toFixed(3);
-      }
-      const mm = buf.match(/< REP MODEL \{(.*?)\} >/);
-      if (mm) model = mm[1].trim();
-      const di = buf.match(/< REP DEVICE_ID \{(.*?)\} >/);
-      if (di) deviceId = di[1].trim();
-    });
-    sock.on('timeout', () => { sock.destroy(); finish({ ok:false, error:'timeout', results, model, deviceId }); });
-    sock.on('error', err => { sock.destroy(); finish({ ok:false, error: err.code || err.message, results, model, deviceId }); });
-    sock.on('close', () => finish({ ok:true, results, model, deviceId }));
-    sock.connect(dev.port || 2202, dev.ip, () => {
-      sock.write('< GET MODEL >< GET DEVICE_ID >');
-      // Only query channels the device is known to have (all 4 until learned)
-      const n = (dev.chCount >= 1 && dev.chCount <= 4) ? dev.chCount : 4;
-      for (let ch = 1; ch <= n; ch++) {
-        // Ask for battery both ways — ULX-D/QLX-D answer BATT_BARS, Axient
-        // answers TX_BATT_BARS; the other returns a harmless error REP
-        sock.write(`< GET ${ch} BATT_BARS >`);
-        sock.write(`< GET ${ch} TX_BATT_BARS >`);
-        sock.write(`< GET ${ch} CHAN_NAME >`);
-        sock.write(`< GET ${ch} FREQUENCY >`);
-      }
-      endTimer = setTimeout(() => sock.end(), 1200);
-    });
-  });
+// ─── Shure live link ──────────────────────────────────────────────────────────
+// One persistent TCP connection per receiver. Devices push < REP ... > the
+// moment a value changes, and we re-ask for battery every 2s over the open
+// socket as a safety net — so battery appears/disappears on the board within
+// a couple of seconds instead of the old connect-poll-disconnect 5s cycle.
+const shureConns = {}; // dev.id -> connection handle
+
+let _shureBroadcastTimer = null;
+function shureStateChanged() {
+  saveStateSoon();
+  if (_shureBroadcastTimer) return;
+  _shureBroadcastTimer = setTimeout(() => {
+    _shureBroadcastTimer = null;
+    broadcast({ type: 'state', payload: state });
+  }, 150); // coalesce bursts of REPs into one broadcast
 }
 
-let _shurePolling = false;
-async function pollAllShure() {
-  if (!shureDevices.length) return;
-  // Devices are polled sequentially and an unreachable one eats its full 2.5s
-  // timeout, so a cycle can outlast the 5s interval — skip instead of overlap.
-  if (_shurePolling) return;
-  _shurePolling = true;
-  try {
-    await pollShureCycle();
-  } finally {
-    _shurePolling = false;
-  }
-}
-
-async function pollShureCycle() {
+function applyShureRep(dev, chNum, data) {
+  const st = shureStatus[dev.id];
+  if (st) { st.channels[chNum] = { ...(st.channels[chNum] || {}), ...data }; st.lastSeen = Date.now(); st.ok = true; st.error = null; }
+  const map = (dev.channels || []).find(c => c.ch === chNum);
+  if (!map) return;
+  const arr = map.slotType === 'mic' ? state.mics : state.iems;
+  const slot = arr && arr[map.slotIndex];
+  if (!slot) return;
   let changed = false;
-  let devsChanged = false;
-  for (const dev of shureDevices) {
-    if (dev.kind === 'dock') { shureStatus[dev.id] = { ok: true, lastSeen: Date.now(), error: null, channels: {}, kind: 'dock' }; continue; }
-    const r = await pollShureDevice(dev);
-    // Self-identify: learn the model and which channels actually answered, so
-    // the UI can show only what the device really has (a dual receiver shows
-    // 2 channels; a charging dock stops being offered as a 4-channel mic rig)
-    if (r.model) {
-      const k = shureModelInfo(r.model).kind;
-      if (dev.model !== r.model || (k !== 'unknown' && dev.kind !== k)) {
-        dev.model = r.model;
-        if (k !== 'unknown') dev.kind = k;
-        devsChanged = true;
-        if (dev.kind === 'dock') { console.log(`[Shure] ${dev.ip} identified as charging dock (${r.model}) — not pollable`); continue; }
+  if (data.bars !== undefined) {
+    const bat = (data.bars === 255) ? null : Math.round(data.bars * 20);
+    if (slot.bat !== bat) { slot.bat = bat; changed = true; }
+  }
+  if (data.chanName !== undefined && slot.wwbName !== data.chanName) { slot.wwbName = data.chanName; changed = true; }
+  if (data.freq !== undefined && slot.freq !== data.freq) { slot.freq = data.freq; changed = true; }
+  if (changed) shureStateChanged();
+}
+
+function handleShureFrame(dev, conn, f) {
+  let m;
+  if ((m = f.match(/< REP (\d) (?:TX_)?BATT_BARS (\d+) >/))) { conn.seen.add(m[1]); applyShureRep(dev, parseInt(m[1]), { bars: parseInt(m[2]) }); return; }
+  if ((m = f.match(/< REP (\d) CHAN_NAME \{(.*?)\} >/)))     { conn.seen.add(m[1]); applyShureRep(dev, parseInt(m[1]), { chanName: m[2].trim() }); return; }
+  if ((m = f.match(/< REP (\d) FREQUENCY (\d+) >/)))         { conn.seen.add(m[1]); applyShureRep(dev, parseInt(m[1]), { freq: (parseInt(m[2]) / 1000).toFixed(3) }); return; }
+  if ((m = f.match(/< REP DEVICE_ID \{(.*?)\} >/))) {
+    const id = m[1].trim();
+    if (dev.deviceId !== id) { dev.deviceId = id; saveShureDevices(); }
+    if (shureStatus[dev.id]) shureStatus[dev.id].deviceId = id;
+    return;
+  }
+  if ((m = f.match(/< REP MODEL \{(.*?)\} >/))) {
+    const model = m[1].trim();
+    const k = shureModelInfo(model).kind;
+    if (dev.model !== model || (k !== 'unknown' && dev.kind !== k)) {
+      dev.model = model;
+      if (k !== 'unknown') dev.kind = k;
+      saveShureDevices();
+      if (shureStatus[dev.id]) { shureStatus[dev.id].model = model; shureStatus[dev.id].kind = dev.kind; }
+      if (dev.kind === 'dock') {
+        console.log(`[Shure] ${dev.ip} identified as charging dock (${model}) — closing link`);
+        disconnectShure(dev.id);
+        shureStatus[dev.id] = { ok: true, lastSeen: Date.now(), error: null, channels: {}, model, deviceId: dev.deviceId || null, kind: 'dock', chCount: 0 };
       }
     }
-    if (r.deviceId && dev.deviceId !== r.deviceId) { dev.deviceId = r.deviceId; devsChanged = true; }
-    const answered = Object.keys(r.results).length;
-    if (r.ok && answered && dev.chCount !== answered) { dev.chCount = answered; devsChanged = true; }
-    shureStatus[dev.id] = { ok: r.ok && answered > 0, lastSeen: r.ok ? Date.now() : (shureStatus[dev.id]?.lastSeen || null), error: r.error || null, channels: r.results, model: dev.model || null, deviceId: dev.deviceId || null, kind: dev.kind || 'receiver', chCount: dev.chCount || null };
-    (dev.channels||[]).forEach(c => {
-      const res = r.results[c.ch];
-      if (!res) return;
+  }
+}
+
+function connectShure(dev) {
+  if (!dev.ip) return;
+  if (dev.kind === 'dock') {
+    shureStatus[dev.id] = { ok: true, lastSeen: Date.now(), error: null, channels: {}, model: dev.model || null, deviceId: dev.deviceId || null, kind: 'dock', chCount: 0 };
+    return;
+  }
+  const conn = { sock: null, buf: '', seen: new Set(), pollTimer: null, reconnectTimer: null, closed: false, dead: false };
+  shureConns[dev.id] = conn;
+  shureStatus[dev.id] = { ...(shureStatus[dev.id] || {}), ok: false, error: null, channels: (shureStatus[dev.id] || {}).channels || {}, model: dev.model || null, deviceId: dev.deviceId || null, kind: dev.kind || 'receiver', chCount: dev.chCount || null };
+  const sock = new net.Socket();
+  conn.sock = sock;
+  sock.setTimeout(6000); // queries flow every 2s — 3 silent rounds means the link is gone
+
+  const queryAll = () => {
+    const n = (dev.chCount >= 1 && dev.chCount <= 4) ? dev.chCount : 4;
+    let q = '';
+    for (let ch = 1; ch <= n; ch++) {
+      // Both battery dialects — ULX-D/QLX-D answer BATT_BARS, Axient TX_BATT_BARS
+      q += `< GET ${ch} BATT_BARS >< GET ${ch} TX_BATT_BARS >< GET ${ch} CHAN_NAME >< GET ${ch} FREQUENCY >`;
+    }
+    try { sock.write(q); } catch(e) {}
+  };
+
+  const teardown = (err) => {
+    if (conn.dead) return;
+    conn.dead = true;
+    if (conn.pollTimer) { clearInterval(conn.pollTimer); conn.pollTimer = null; }
+    try { sock.destroy(); } catch(e) {}
+    if (shureStatus[dev.id]) { shureStatus[dev.id].ok = false; shureStatus[dev.id].error = err || 'disconnected'; }
+    // A dead link means we no longer know the battery — clear it off the board
+    let cleared = false;
+    (dev.channels || []).forEach(c => {
       const arr = c.slotType === 'mic' ? state.mics : state.iems;
       const slot = arr && arr[c.slotIndex];
-      if (!slot) return;
-      if (res.bars !== undefined) {
-        const bat = (res.bars === 255) ? null : Math.round(res.bars * 20);
-        if (slot.bat !== bat) { slot.bat = bat; changed = true; }
-      }
-      if (res.chanName !== undefined && slot.wwbName !== res.chanName) {
-        slot.wwbName = res.chanName; changed = true;
-      }
-      // Live RF frequency from the receiver is the truth — keep the slot in sync
-      if (res.freq !== undefined && slot.freq !== res.freq) {
-        slot.freq = res.freq; changed = true;
-      }
+      if (slot && slot.bat != null) { slot.bat = null; cleared = true; }
     });
-  }
-  if (devsChanged) saveShureDevices();
-  if (changed) { saveStateSoon(); broadcast({ type: 'state', payload: state }); }
+    if (cleared) shureStateChanged();
+    if (!conn.closed) conn.reconnectTimer = setTimeout(() => connectShure(dev), 3000);
+  };
+
+  sock.on('connect', () => {
+    conn.buf = '';
+    conn.seen.clear();
+    sock.write('< GET MODEL >< GET DEVICE_ID >');
+    queryAll();
+    conn.pollTimer = setInterval(queryAll, 2000);
+    // After the first full round, remember how many channels actually exist
+    setTimeout(() => {
+      if (conn.dead) return;
+      const n = conn.seen.size;
+      if (n >= 1 && n <= 4 && dev.chCount !== n) { dev.chCount = n; saveShureDevices(); if (shureStatus[dev.id]) shureStatus[dev.id].chCount = n; }
+    }, 3000);
+  });
+  sock.on('data', d => {
+    conn.buf += d.toString();
+    // Consume complete < ... > frames, keep any partial tail for the next chunk
+    const frameRe = /<[^>]*>/g;
+    let m, lastEnd = 0;
+    const frames = [];
+    while ((m = frameRe.exec(conn.buf)) !== null) { frames.push(m[0]); lastEnd = frameRe.lastIndex; }
+    conn.buf = conn.buf.slice(lastEnd);
+    if (conn.buf.length > 4096) conn.buf = ''; // garbage guard
+    frames.forEach(f => handleShureFrame(dev, conn, f));
+  });
+  sock.on('error', e => teardown(e.code || e.message));
+  sock.on('timeout', () => teardown('timeout'));
+  sock.on('close', () => teardown());
+  sock.connect(dev.port || 2202, dev.ip);
 }
-setInterval(pollAllShure, 5000);
+
+function disconnectShure(id) {
+  const conn = shureConns[id];
+  if (!conn) return;
+  conn.closed = true;
+  if (conn.reconnectTimer) clearTimeout(conn.reconnectTimer);
+  if (conn.pollTimer) clearInterval(conn.pollTimer);
+  try { conn.sock.destroy(); } catch(e) {}
+  conn.dead = true;
+  delete shureConns[id];
+}
+
+function reconnectAllShure() {
+  Object.keys(shureConns).forEach(disconnectShure);
+  shureDevices.forEach(connectShure);
+}
+
+// Open links to all saved devices on boot
+reconnectAllShure();
 
 app.get('/api/shure-devices', (req, res) => res.json(shureDevices));
 app.post('/api/shure-devices', (req, res) => {
@@ -1250,7 +1274,7 @@ app.post('/api/shure-devices', (req, res) => {
   shureDevices = req.body.map((d,i) => ({ id: d.id || 'shure_'+Date.now()+'_'+i, ip: d.ip, port: d.port||2202, type: d.type||'ulxd', channels: d.channels||[], model: d.model||null, deviceId: d.deviceId||null, kind: d.kind||null, chCount: d.chCount||null }));
   saveShureDevices();
   shureStatus = {};
-  pollAllShure();
+  reconnectAllShure();
   res.json({ ok: true, count: shureDevices.length });
 });
 app.get('/api/shure-status', (req, res) => res.json(shureStatus));
