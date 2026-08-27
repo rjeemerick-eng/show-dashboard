@@ -1139,8 +1139,13 @@ function pollShureDevice(dev) {
       // don't match these patterns — harmless.
       buf += d.toString();
       let m;
-      const re = /< REP (\d) BATT_BARS (\d+) >/g;
+      const re = /< REP (\d) BATT_BARS (\d+) >/g;          // ULX-D / QLX-D / SLX-D
       while ((m = re.exec(buf)) !== null) {
+        results[parseInt(m[1])] = results[parseInt(m[1])] || {};
+        results[parseInt(m[1])].bars = parseInt(m[2]);
+      }
+      const rtx = /< REP (\d) TX_BATT_BARS (\d+) >/g;      // Axient Digital
+      while ((m = rtx.exec(buf)) !== null) {
         results[parseInt(m[1])] = results[parseInt(m[1])] || {};
         results[parseInt(m[1])].bars = parseInt(m[2]);
       }
@@ -1148,6 +1153,11 @@ function pollShureDevice(dev) {
       while ((m = rn.exec(buf)) !== null) {
         results[parseInt(m[1])] = results[parseInt(m[1])] || {};
         results[parseInt(m[1])].chanName = m[2].trim();
+      }
+      const rf = /< REP (\d) FREQUENCY (\d+) >/g;          // kHz -> "518.225"
+      while ((m = rf.exec(buf)) !== null) {
+        results[parseInt(m[1])] = results[parseInt(m[1])] || {};
+        results[parseInt(m[1])].freq = (parseInt(m[2]) / 1000).toFixed(3);
       }
       const mm = buf.match(/< REP MODEL \{(.*?)\} >/);
       if (mm) model = mm[1].trim();
@@ -1162,8 +1172,12 @@ function pollShureDevice(dev) {
       // Only query channels the device is known to have (all 4 until learned)
       const n = (dev.chCount >= 1 && dev.chCount <= 4) ? dev.chCount : 4;
       for (let ch = 1; ch <= n; ch++) {
+        // Ask for battery both ways — ULX-D/QLX-D answer BATT_BARS, Axient
+        // answers TX_BATT_BARS; the other returns a harmless error REP
         sock.write(`< GET ${ch} BATT_BARS >`);
+        sock.write(`< GET ${ch} TX_BATT_BARS >`);
         sock.write(`< GET ${ch} CHAN_NAME >`);
+        sock.write(`< GET ${ch} FREQUENCY >`);
       }
       endTimer = setTimeout(() => sock.end(), 1200);
     });
@@ -1218,6 +1232,10 @@ async function pollShureCycle() {
       }
       if (res.chanName !== undefined && slot.wwbName !== res.chanName) {
         slot.wwbName = res.chanName; changed = true;
+      }
+      // Live RF frequency from the receiver is the truth — keep the slot in sync
+      if (res.freq !== undefined && slot.freq !== res.freq) {
+        slot.freq = res.freq; changed = true;
       }
     });
   }

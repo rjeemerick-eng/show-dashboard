@@ -259,7 +259,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         <!-- Shure live battery -->
       <div class="set-card">
         <div class="set-title">Shure live battery</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Poll ULX-D / QLX-D / Axient Digital receivers on the network for transmitter battery. Battery shows on the board and turns the dot amber when low. (PSM1000 packs have no return channel and can't report battery.)</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Poll ULX-D / QLX-D / SLX-D / Axient Digital receivers for transmitter battery, channel names, and RF frequency. Battery shows on the board while the mic is on and turns the dot amber when low. (PSM1000 packs have no return channel and can't report battery.)</div>
         <div id="shure-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
         <div style="display:flex;gap:8px">
           <button class="btn" id="shure-scan-btn" onclick="scanShure()"><i class="ti ti-radar-2"></i> Scan network</button>
@@ -1451,7 +1451,7 @@ function shureChannelOpts(type, ch) {
       const mapped = (d.channels||[]).find(c=>c.ch===n);
       const isMine = mapped && mapped.slotType===type && mapped.slotIndex===slotIndex;
       const taken = mapped && !isMine ? ' (in use)' : '';
-      opts += `<option value="${esc(d.id)}:${n}"${isMine?' selected':''}>${esc(d.ip)} · ${esc(nm)}${taken}</option>`;
+      opts += `<option value="${esc(d.id)}:${n}"${isMine?' selected':''}>${esc(d.deviceId||d.ip)} · ${esc(nm)}${taken}</option>`;
     });
   });
   return opts;
