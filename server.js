@@ -1194,10 +1194,13 @@ function connectShure(dev) {
 
   const queryAll = () => {
     const n = (dev.chCount >= 1 && dev.chCount <= 4) ? dev.chCount : 4;
+    // IEM transmitters (P10T) have no pack telemetry — only names & frequency
+    const wantBatt = dev.kind !== 'iem-tx';
     let q = '';
     for (let ch = 1; ch <= n; ch++) {
       // Both battery dialects — ULX-D/QLX-D answer BATT_BARS, Axient TX_BATT_BARS
-      q += `< GET ${ch} BATT_BARS >< GET ${ch} TX_BATT_BARS >< GET ${ch} CHAN_NAME >< GET ${ch} FREQUENCY >`;
+      if (wantBatt) q += `< GET ${ch} BATT_BARS >< GET ${ch} TX_BATT_BARS >`;
+      q += `< GET ${ch} CHAN_NAME >< GET ${ch} FREQUENCY >`;
     }
     try { sock.write(q); } catch(e) {}
   };

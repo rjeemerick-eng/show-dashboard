@@ -259,7 +259,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         <!-- Shure live battery -->
       <div class="set-card">
         <div class="set-title">Shure live battery</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Poll ULX-D / QLX-D / SLX-D / Axient Digital receivers for transmitter battery, channel names, and RF frequency. Battery shows on the board while the mic is on and turns the dot amber when low. (PSM1000 packs have no return channel and can't report battery.)</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Live link to ULX-D / QLX-D / SLX-D / Axient Digital receivers for transmitter battery, channel names, and RF frequency — and to PSM1000 (P10T) transmitters for IEM channel names and frequency. Battery shows on the board while the mic is on and turns the dot amber when low. (IEM packs have no return channel and can't report battery.)</div>
         <div id="shure-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
         <div style="display:flex;gap:8px">
           <button class="btn" id="shure-scan-btn" onclick="scanShure()"><i class="ti ti-radar-2"></i> Scan network</button>
@@ -900,7 +900,8 @@ function renderShureList() {
           <option value="ulxd"${d.type==='ulxd'?' selected':''}>ULX-D / QLX-D</option>
           <option value="ad4"${d.type==='ad4'?' selected':''}>Axient Digital</option>
         </select>`;
-    const dockNote = isDock ? '<div style="font-size:11px;color:var(--text-dim)">Charging dock — no stage channels to map.</div>' : '';
+    const dockNote = isDock ? '<div style="font-size:11px;color:var(--text-dim)">Charging dock — no stage channels to map.</div>'
+      : d.kind==='iem-tx' ? '<div style="font-size:10px;color:var(--text-dim);margin-top:2px">IEM transmitter — feeds channel names &amp; frequency to mapped slots (packs can\'t report battery).</div>' : '';
     return `<div style="background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <span id="shure-dot-${d.id}" style="width:7px;height:7px;border-radius:50%;background:#555;flex-shrink:0"></span>
@@ -953,7 +954,9 @@ function renderShureScanResults() {
     const already = shureDevs.some(x => x.ip === d.ip);
     const isDock = d.kind === 'dock';
     const chans = Object.entries(d.channels || {}).map(([n, nm]) => nm ? `Ch ${n}: ${esc(nm)}` : null).filter(Boolean).join(' · ');
-    const sub = isDock ? 'Charging dock — reports no stage channels' : (chans || (d.chCount ? d.chCount + ' channel' + (d.chCount > 1 ? 's' : '') : 'No channel names reported'));
+    const sub = isDock ? 'Charging dock — reports no stage channels'
+      : (d.kind === 'iem-tx' ? 'IEM transmitter — names & frequency (packs can\'t report battery)' + (chans ? ' · ' + chans : '')
+      : (chans || (d.chCount ? d.chCount + ' channel' + (d.chCount > 1 ? 's' : '') : 'No channel names reported')));
     const action = isDock
       ? '<span style="font-size:10px;color:var(--text-dim);flex-shrink:0">Nothing to map</span>'
       : already
@@ -978,14 +981,18 @@ async function addScannedShure(i) {
   // label ("Vox 1" on the receiver -> the Vox 1 slot). Mic slots first —
   // receivers carry mics; IEM packs have no return channel.
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const takenMic = new Set(), takenIem = new Set();
-  shureDevs.forEach(x => (x.channels || []).forEach(c => (c.slotType === 'mic' ? takenMic : takenIem).add(c.slotIndex)));
+  const taken = { mic: new Set(), iem: new Set() };
+  shureDevs.forEach(x => (x.channels || []).forEach(c => taken[c.slotType === 'mic' ? 'mic' : 'iem'].add(c.slotIndex)));
+  // Mic receivers map to mic slots first; IEM transmitters (P10T) to IEM slots first
+  const order = d.kind === 'iem-tx'
+    ? [{ arr: state.iems, slotType: 'iem' }, { arr: state.mics, slotType: 'mic' }]
+    : [{ arr: state.mics, slotType: 'mic' }, { arr: state.iems, slotType: 'iem' }];
   Object.entries(d.channels || {}).forEach(([n, nm]) => {
     if (!nm) return;
-    const micIdx = state.mics.findIndex((c, idx) => norm(c.role) === norm(nm) && !takenMic.has(idx));
-    if (micIdx !== -1) { dev.channels.push({ ch: parseInt(n), slotType: 'mic', slotIndex: micIdx }); takenMic.add(micIdx); return; }
-    const iemIdx = state.iems.findIndex((c, idx) => norm(c.role) === norm(nm) && !takenIem.has(idx));
-    if (iemIdx !== -1) { dev.channels.push({ ch: parseInt(n), slotType: 'iem', slotIndex: iemIdx }); takenIem.add(iemIdx); }
+    for (const { arr, slotType } of order) {
+      const idx = arr.findIndex((c, i) => norm(c.role) === norm(nm) && !taken[slotType].has(i));
+      if (idx !== -1) { dev.channels.push({ ch: parseInt(n), slotType, slotIndex: idx }); taken[slotType].add(idx); break; }
+    }
   });
   shureDevs.push(dev);
   renderShureList();
