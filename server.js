@@ -1006,16 +1006,52 @@ function queueAutoPull(sched, trigger) {
   return p;
 }
 
-// Most recent scheduled occurrence of a schedule (day-of-week + time, local)
-// at or before `now`
+// The Nth (or last) occurrence of a weekday in a given month, at h:m local.
+// week: '1'..'4' or 'last'. The 1st-4th occurrence always exists.
+function occurrenceInMonth(year, month, day, week, h, m) {
+  if (week === 'last') {
+    const t = new Date(year, month + 1, 0, h, m, 0, 0); // last day of month
+    t.setDate(t.getDate() - ((t.getDay() - day + 7) % 7));
+    return t;
+  }
+  const firstDow = new Date(year, month, 1).getDay();
+  const date = 1 + ((day - firstDow + 7) % 7) + (parseInt(week) - 1) * 7;
+  return new Date(year, month, date, h, m, 0, 0);
+}
+
+// Most recent scheduled occurrence of a schedule at or before `now`.
+// week 'every' = weekly on `day`; '1'..'4'/'last' = that occurrence per month.
 function lastScheduledTime(sched, now) {
   const [h, m] = String(sched.time || '09:00').split(':').map(n => parseInt(n) || 0);
-  const t = new Date(now);
-  t.setHours(h, m, 0, 0);
-  const diff = (t.getDay() - (sched.day ?? 4) + 7) % 7;
-  t.setDate(t.getDate() - diff);
-  if (t.getTime() > now) t.setDate(t.getDate() - 7);
-  return t.getTime();
+  const day = sched.day ?? 4;
+  const week = sched.week || 'every';
+  if (week === 'every') {
+    const t = new Date(now);
+    t.setHours(h, m, 0, 0);
+    t.setDate(t.getDate() - ((t.getDay() - day + 7) % 7));
+    if (t.getTime() > now) t.setDate(t.getDate() - 7);
+    return t.getTime();
+  }
+  const nd = new Date(now);
+  for (let back = 0; back < 3; back++) {
+    const t = occurrenceInMonth(nd.getFullYear(), nd.getMonth() - back, day, week, h, m);
+    if (t.getTime() <= now) return t.getTime();
+  }
+  return 0;
+}
+
+// Next occurrence strictly after `now` (for display)
+function nextScheduledTime(sched, now) {
+  const [h, m] = String(sched.time || '09:00').split(':').map(n => parseInt(n) || 0);
+  const day = sched.day ?? 4;
+  const week = sched.week || 'every';
+  if (week === 'every') return lastScheduledTime(sched, now) + 7 * 24 * 3600 * 1000;
+  const nd = new Date(now);
+  for (let fwd = 0; fwd < 3; fwd++) {
+    const t = occurrenceInMonth(nd.getFullYear(), nd.getMonth() + fwd, day, week, h, m);
+    if (t.getTime() > now) return t.getTime();
+  }
+  return null;
 }
 
 // Fire each schedule when its weekly time passes. Also catches up after
@@ -1037,7 +1073,7 @@ setInterval(() => {
 app.get('/api/autopull', (req, res) => {
   res.json({ schedules: autoPulls.map(({ _lastAttempt, ...s }) => ({
     ...s,
-    nextRun: s.enabled ? lastScheduledTime(s, Date.now()) + 7 * 24 * 3600 * 1000 : null
+    nextRun: s.enabled ? nextScheduledTime(s, Date.now()) : null
   })) });
 });
 app.post('/api/autopull', (req, res) => {
@@ -1051,6 +1087,7 @@ app.post('/api/autopull', (req, res) => {
       typeId: String(b.typeId || ''),
       typeName: String(b.typeName || ''),
       day: Math.min(6, Math.max(0, parseInt(b.day) || 0)),
+      week: ['every', '1', '2', '3', '4', 'last'].includes(b.week) ? b.week : 'every',
       time: /^\d{2}:\d{2}$/.test(b.time) ? b.time : '09:00',
       goLive: b.goLive !== false,
       // run history survives edits to the same schedule

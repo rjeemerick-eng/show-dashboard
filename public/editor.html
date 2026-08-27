@@ -226,7 +226,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
           <div class="set-title" style="margin-bottom:0">Automatic weekly pulls</div>
           <button class="btn" style="padding:3px 8px;font-size:11px" onclick="addAutoPull()"><i class="ti ti-plus"></i> Add schedule</button>
         </div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Each schedule pulls the next upcoming plan for its own service type at its own day &amp; time — build the board, save it as a service named after the plan date, and optionally go live. Two schedules on the same type act as pull + refresh. If the Mac is asleep at a scheduled time it runs as soon as the app is back up.</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Each schedule pulls the next upcoming plan for its own service type on its own rhythm — every week, or a specific week of the month ("1st of month" + Tuesday = the first Tuesday). It builds the board, saves it as a service named after the plan date, and optionally goes live. Two schedules on the same type act as pull + refresh. If the Mac is asleep at a scheduled time it runs as soon as the app is back up.</div>
         <div id="ap-list" style="margin-bottom:10px"></div>
         <button class="btn success" onclick="saveAutoPullSchedule()"><i class="ti ti-check"></i> Save schedules</button>
       </div>
@@ -1047,6 +1047,8 @@ function renderAutoPullList(){
     if(s.typeId&&!types.find(t=>t.id===s.typeId))types.push({id:s.typeId,name:s.typeName||s.typeId});
     const typeOpts='<option value="">Select type…</option>'+types.map(t=>`<option value="${esc(t.id)}"${t.id===s.typeId?' selected':''}>${esc(t.name)}</option>`).join('');
     const dayOpts=DAYS.map((d,di)=>`<option value="${di}"${(s.day??4)===di?' selected':''}>${d}</option>`).join('');
+    const WEEKS=[['every','Every week'],['1','1st of month'],['2','2nd of month'],['3','3rd of month'],['4','4th of month'],['last','Last of month']];
+    const weekOpts=WEEKS.map(([v,l])=>`<option value="${v}"${(s.week||'every')===v?' selected':''}>${l}</option>`).join('');
     const status=[s.lastResult?'Last: '+s.lastResult:null,s.enabled&&s.nextRun?'Next: '+new Date(s.nextRun).toLocaleString():null].filter(Boolean).join('  ·  ');
     return `<div style="background:var(--s3);border:1px solid var(--border-mid);border-radius:8px;padding:10px;margin-bottom:8px">
       <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
@@ -1054,6 +1056,8 @@ function renderAutoPullList(){
           <select onchange="autoPulls[${i}].enabled=this.value==='1'"><option value="0"${!s.enabled?' selected':''}>Off</option><option value="1"${s.enabled?' selected':''}>On</option></select></div>
         <div class="pf" style="flex:1;min-width:150px"><label>Service type</label>
           <select onchange="autoPulls[${i}].typeId=this.value;autoPulls[${i}].typeName=this.selectedOptions[0]?.textContent||''">${typeOpts}</select></div>
+        <div class="pf" style="width:118px"><label>Repeat</label>
+          <select onchange="autoPulls[${i}].week=this.value">${weekOpts}</select></div>
         <div class="pf" style="width:112px"><label>Day</label>
           <select onchange="autoPulls[${i}].day=parseInt(this.value)">${dayOpts}</select></div>
         <div class="pf" style="width:92px"><label>Time</label>
@@ -1068,7 +1072,7 @@ function renderAutoPullList(){
   }).join('');
 }
 function addAutoPull(){
-  autoPulls.push({id:'ap_'+Date.now(),enabled:true,typeId:'',typeName:'',day:4,time:'09:00',goLive:true});
+  autoPulls.push({id:'ap_'+Date.now(),enabled:true,typeId:'',typeName:'',week:'every',day:4,time:'09:00',goLive:true});
   renderAutoPullList();
 }
 async function saveAutoPullSchedule(){
