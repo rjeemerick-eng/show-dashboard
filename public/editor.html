@@ -1336,8 +1336,20 @@ async function applyConflictRules() {
 // ── Render ─────────────────────────────────────────────────────────────────────
 let rightTab='prod'; // which list the right editor column shows
 function setRightTab(t){rightTab=t;render();}
+// Never rebuild the lists while someone is typing in them — live battery
+// broadcasts arrive every ~2s and would wipe the half-typed input. The
+// pending render runs as soon as the field blurs.
+let _renderPending=false;
+function typingInBoard(){
+  const a=document.activeElement;
+  if(!a||(a.tagName!=='INPUT'&&a.tagName!=='TEXTAREA'))return false;
+  return !!(a.closest&&(a.closest('#iem-list')||a.closest('#prod-list')));
+}
+document.addEventListener('focusout',()=>{ if(_renderPending)setTimeout(()=>{ if(_renderPending&&!typingInBoard())render(); },30); });
 function render(){
   if(!state)return;
+  if(typingInBoard()){_renderPending=true;return;}
+  _renderPending=false;
   if(!Array.isArray(state.talkMics))state.talkMics=[]; // pre-talkMics snapshots
   document.getElementById('ftr-label').textContent=state.serviceName||'RF Assign';
   document.getElementById('iem-ct').textContent=state.iems.filter(c=>c.status==='active').length+' active';
@@ -1442,8 +1454,8 @@ function renderList(type){
     arr.forEach((ch,i)=>{
       const isExp=expandedRow&&expandedRow.type==='talk'&&expandedRow.id===ch.id;
       const dotCls=ch.name?(ch.bat!==null&&ch.bat!=null&&ch.bat<30?'warn':'on'):'off';
-      const mvBtn='padding:1px 5px;border-radius:4px;border:1px solid var(--border-mid);background:none;color:var(--text-dim);cursor:pointer;font-size:9px;line-height:1.4';
-      html+=`<div class="assign-row" style="grid-template-columns:80px 1fr 1fr 72px;cursor:pointer" onclick="toggleExpand('talk','${ch.id}')">
+      html+=`<div class="assign-row" style="grid-template-columns:80px 1fr 1fr 48px;cursor:pointer" onclick="toggleExpand('talk','${ch.id}')"
+        ondragstart="talkDragStart(event,${i})" ondragover="talkDragOver(event)" ondragleave="talkDragLeave(event)" ondrop="talkDrop(event,${i})" ondragend="talkDragEnd(event)">
         <input type="text" value="${esc(talkLabel(ch))}" placeholder="mic #"
           onclick="event.stopPropagation()" onchange="uf('talk','${ch.id}','ch',this.value.trim())"
           style="width:100%;padding:5px 7px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s2);color:var(--text);font-size:11px;font-weight:800;font-family:inherit">
@@ -1453,9 +1465,9 @@ function renderList(type){
         <input type="text" value="${esc(ch.note||'')}" placeholder="notes"
           onclick="event.stopPropagation()" onchange="uf('talk','${ch.id}','note',this.value)"
           style="width:100%;padding:5px 8px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s3);color:var(--text-mid);font-size:12px;font-family:inherit">
-        <div style="display:flex;align-items:center;gap:3px;justify-content:flex-end" onclick="event.stopPropagation()">
-          <button onclick="moveTalk('${ch.id}',-1)" title="Move up"${i===0?' disabled':''} style="${mvBtn}${i===0?';opacity:0.25;cursor:default':''}">▲</button>
-          <button onclick="moveTalk('${ch.id}',1)" title="Move down"${i===arr.length-1?' disabled':''} style="${mvBtn}${i===arr.length-1?';opacity:0.25;cursor:default':''}">▼</button>
+        <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end" onclick="event.stopPropagation()">
+          <span title="Drag to reorder" onmousedown="this.closest('.assign-row').setAttribute('draggable','true')"
+            style="cursor:grab;color:var(--text-dim);font-size:14px;padding:0 2px;line-height:1"><i class="ti ti-grip-vertical"></i></span>
           <div class="s-dot ${dotCls}"></div>
         </div>
       </div>`;
@@ -1682,17 +1694,28 @@ function addRightSlot(){ if(rightTab==='talk')addTalkMic(); else addProdSlot(); 
 function saveTalkMappingChanges(){
   fetch('/api/shure-devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(shureDevs.filter(d=>d.ip))});
 }
-function moveTalk(id,dir){
+// Drag a row by its grip to reorder
+let _talkDrag=null;
+function talkDragStart(e,i){_talkDrag=i;e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',String(i));}catch(err){}}
+function talkDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';e.currentTarget.style.background='rgba(55,138,221,0.10)';}
+function talkDragLeave(e){e.currentTarget.style.background='';}
+function talkDrop(e,i){e.preventDefault();e.currentTarget.style.background='';const from=_talkDrag;_talkDrag=null;if(from==null||from===i)return;reorderTalk(from,i);}
+function talkDragEnd(e){e.currentTarget.removeAttribute('draggable');_talkDrag=null;render();}
+
+function reorderTalk(from,to){
   const arr=state.talkMics||[];
-  const i=arr.findIndex(c=>c.id===id);
-  const j=i+dir;
-  if(i<0||j<0||j>=arr.length)return;
-  [arr[i],arr[j]]=[arr[j],arr[i]];
+  if(from===to||from<0||to<0||from>=arr.length||to>=arr.length)return;
+  const oldIds=arr.map(c=>c.id);
+  const [row]=arr.splice(from,1);
+  arr.splice(to,0,row);
+  // Wireless mappings are index-keyed — re-point each at its row's new index
+  const newIndexOf={};arr.forEach((c,i)=>newIndexOf[c.id]=i);
   let changed=false;
   shureDevs.forEach(d=>(d.channels||[]).forEach(c=>{
     if(c.slotType!=='talk')return;
-    if(c.slotIndex===i){c.slotIndex=j;changed=true;}
-    else if(c.slotIndex===j){c.slotIndex=i;changed=true;}
+    const id=oldIds[c.slotIndex];
+    const ni=id!=null?newIndexOf[id]:undefined;
+    if(ni!==undefined&&ni!==c.slotIndex){c.slotIndex=ni;changed=true;}
   }));
   if(changed)saveTalkMappingChanges();
   render();push();
