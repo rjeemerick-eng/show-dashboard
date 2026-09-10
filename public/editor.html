@@ -870,7 +870,7 @@ function slotOpts(sel) {
   let o = '<option value="">— not mapped —</option>';
   state.iems.forEach((c,i)=>{ o += `<option value="iem:${i}"${sel==='iem:'+i?' selected':''}>IEM ${i+1} — ${esc(c.role)}</option>`; });
   state.mics.forEach((c,i)=>{ o += `<option value="mic:${i}"${sel==='mic:'+i?' selected':''}>Mic ${i+1} — ${esc(c.role)}</option>`; });
-  (state.talkMics||[]).forEach((c,i)=>{ o += `<option value="talk:${i}"${sel==='talk:'+i?' selected':''}>Spk — ${esc(c.role)}</option>`; });
+  (state.talkMics||[]).forEach((c,i)=>{ const rf=String(c.ch??''); o += `<option value="talk:${i}"${sel==='talk:'+i?' selected':''}>${esc(/^rf/i.test(rf)?rf.toUpperCase():'RF'+rf)}${c.name?` — ${esc(c.name)}`:''}</option>`; });
   return o;
 }
 let shureLive = {};
@@ -1362,7 +1362,6 @@ function poolOptions(assigned, slotType='iem'){
   state.iems.forEach(c=>{if(c.name)allAssigned.add(c.name)});
   state.mics.forEach(c=>{if(c.name)allAssigned.add(c.name)});
   state.prod.forEach(c=>{if(c.name)allAssigned.add(c.name)});
-  (state.talkMics||[]).forEach(c=>{if(c.name)allAssigned.add(c.name)});
 
   const seen=new Set();
   const combined=[];
@@ -1388,7 +1387,6 @@ function poolOptions(assigned, slotType='iem'){
     const person=(peopleLibrary||[]).find(x=>x.name===p.name);
     const hasProd = tag.prodPosition || person?.defaultProdPosition;
     const hasIem  = (tag.iemSlot!=null && tag.iemSlot!==undefined) || (person?.defaultIemSlot!=null && person?.defaultIemSlot!==undefined);
-    if(slotType==='any') return true; // talking-head mics: anyone not already placed
     if(slotType==='prod') return hasProd || (!hasIem && !hasProd);
     return hasIem || (!hasIem && !hasProd);
   });
@@ -1438,6 +1436,25 @@ function renderList(type){
         if(isExp)html+=expandedFields(p,'prod');
       });
     });
+  } else if(type==='talk'){
+    // Talking-head mics: free-typed name + notes, laid out MIC | NAME | NOTES
+    arr.forEach(ch=>{
+      const isExp=expandedRow&&expandedRow.type==='talk'&&expandedRow.id===ch.id;
+      const rf=String(ch.ch??'');
+      const rfLbl=/^rf/i.test(rf)?rf.toUpperCase():'RF'+rf;
+      const dotCls=ch.name?(ch.bat!==null&&ch.bat!=null&&ch.bat<30?'warn':'on'):'off';
+      html+=`<div class="assign-row" style="grid-template-columns:56px 1fr 1fr 28px;cursor:pointer" onclick="toggleExpand('talk','${ch.id}')">
+        <div class="row-ch" style="text-align:left;font-size:12px">${esc(rfLbl)}</div>
+        <input type="text" value="${esc(ch.name||'')}" placeholder="talking head"
+          onclick="event.stopPropagation()" onchange="uf('talk','${ch.id}','name',this.value.trim())"
+          style="width:100%;padding:5px 8px;border:1px solid ${ch.name?'rgba(34,197,94,0.4)':'var(--border-mid)'};border-radius:6px;background:var(--s3);color:var(--text);font-size:12px;font-family:inherit">
+        <input type="text" value="${esc(ch.note||'')}" placeholder="notes"
+          onclick="event.stopPropagation()" onchange="uf('talk','${ch.id}','note',this.value)"
+          style="width:100%;padding:5px 8px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s3);color:var(--text-mid);font-size:12px;font-family:inherit">
+        <div style="display:flex;align-items:center;justify-content:center"><div class="s-dot ${dotCls}"></div></div>
+      </div>`;
+      if(isExp)html+=expandedFields(ch,'talk');
+    });
   } else {
     arr.forEach((ch,i)=>{
       const isExp=expandedRow&&expandedRow.type===type&&expandedRow.id===ch.id;
@@ -1447,18 +1464,18 @@ function renderList(type){
       const tagIcon=savedTags[ch.name]?'tagged':'';
       html+=`<div class="assign-row ${type==='iem'?'iem-row':'mic-row'}" onclick="toggleExpand('${type}','${ch.id}')" style="cursor:pointer">
         <div class="row-ch">${ch.ch}</div>
-        <div class="row-role">${esc(ch.role)}${type==='talk'&&ch.note?`<div style="font-size:9px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ch.note)}</div>`:''}</div>
+        <div class="row-role">${esc(ch.role)}</div>
         ${avatar(ch.name,ch.photo,30)}
         <div style="display:flex;gap:4px;align-items:center" onclick="event.stopPropagation()">
           <select class="row-select${ch.name?' filled':''}"
             onchange="assignSlot('${type}','${ch.id}',this.value)"
             style="flex:1;max-height:200px">
             <option value="">— unassigned —</option>
-            ${poolOptions(ch.name,type==='talk'?'any':'iem')}
+            ${poolOptions(ch.name,'iem')}
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:3px">
-          ${ch.name&&type!=='talk'?`<button class="tag-btn ${tagIcon}" onclick="event.stopPropagation();quickTag('${type}','${ch.id}')" title="Save as tag"><i class="ti ti-tag"></i></button>`:'<span style="width:24px"></span>'}
+          ${ch.name?`<button class="tag-btn ${tagIcon}" onclick="event.stopPropagation();quickTag('${type}','${ch.id}')" title="Save as tag"><i class="ti ti-tag"></i></button>`:'<span style="width:24px"></span>'}
         </div>
       </div>`;
       if(isExp)html+=expandedFields(ch,type);
