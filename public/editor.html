@@ -261,6 +261,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
         <div class="pf"><label>Right zone</label>
           <select id="view-zone" onchange="setBoardView('rightZone',this.value)">
             <option value="crew">Production crew</option>
+            <option value="mics">Mic assignments (talking heads)</option>
             <option value="ros">Run of show (from Planning Center)</option>
             <option value="none">Hidden — IEM packs full width</option>
           </select>
@@ -446,13 +447,16 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
   <div class="col-div"></div>
 
-  <!-- PRODUCTION -->
+  <!-- PRODUCTION / TALKING-HEAD MICS -->
   <div class="col">
     <div class="col-hdr">
-      <span class="col-hdr-title"><i class="ti ti-tool" style="font-size:10px"></i> Production crew</span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <button class="set-tab-btn active" id="rtab-prod" style="padding:2px 10px;font-size:9px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase" onclick="setRightTab('prod')"><i class="ti ti-tool" style="font-size:10px"></i> Production crew</button>
+        <button class="set-tab-btn" id="rtab-talk" style="padding:2px 10px;font-size:9px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase" onclick="setRightTab('talk')"><i class="ti ti-microphone" style="font-size:10px"></i> Mic assignments</button>
+      </div>
       <div class="col-hdr-right" style="gap:8px">
         <span id="prod-ct"></span>
-        <button class="btn" style="padding:3px 8px;font-size:11px" onclick="addProdSlot()"><i class="ti ti-plus"></i></button>
+        <button class="btn" style="padding:3px 8px;font-size:11px" onclick="addRightSlot()"><i class="ti ti-plus"></i></button>
       </div>
     </div>
     <div class="assign-list" id="prod-list"></div>
@@ -503,7 +507,7 @@ let playlistData=[], activeServiceId=null;
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function initials(n){if(!n||!n.trim())return'?';const p=n.trim().split(' ');return p.length>1?(p[0][0]+p[p.length-1][0]).toUpperCase():p[0].slice(0,2).toUpperCase()}
 function colorFor(n){let h=0;for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h);return COLORS[Math.abs(h)%COLORS.length]}
-function arrFor(t){return t==='mic'?state.mics:t==='iem'?state.iems:state.prod}
+function arrFor(t){return t==='mic'?state.mics:t==='iem'?state.iems:t==='talk'?state.talkMics:state.prod}
 function toast(msg,color='#4ade80'){
   const el=document.createElement('div');
   el.className='toast';
@@ -670,6 +674,18 @@ function exportPDF() {
     </div>`;
   }).join('');
 
+  // Talking-head mics — printed under the production groups when any are assigned
+  const talk = (state.talkMics||[]).filter(c=>c.name);
+  const talkHTML = talk.length ? `
+    <div class="pgroup">
+      <div class="pghead"><span class="pglabel" style="color:#E24B4A">Mics</span><span class="pgline" style="background:#E24B4A33"></span></div>
+      ${talk.map(c=>`
+      <div class="pmrow">
+        ${av(c.name, c.photo, 26)}
+        <div class="pmtext"><span class="pmname">${esc(c.name)}</span><span class="pmrole" style="color:#E24B4A">RF ${esc(String(c.ch??''))} · ${esc(c.role)}${c.note?` — ${esc(c.note)}`:''}</span></div>
+      </div>`).join('')}
+    </div>` : '';
+
   const activeIem = state.iems.filter(c=>c.name).length;
   const activeProd = state.prod.filter(p=>p.name).length;
 
@@ -721,6 +737,7 @@ function exportPDF() {
     <div>
       <div class="colhead"><span class="coltitle">🔧&nbsp; Production Crew</span><span class="colcount">${activeProd} ACTIVE</span></div>
       ${prodHTML || '<div style="padding:20px 28px;color:var(--text-dim);font-size:12px">No production crew assigned</div>'}
+      ${talkHTML}
     </div>
   </div>
   <script>window.onload=function(){setTimeout(function(){window.print()},400)}<\/script>
@@ -853,6 +870,7 @@ function slotOpts(sel) {
   let o = '<option value="">— not mapped —</option>';
   state.iems.forEach((c,i)=>{ o += `<option value="iem:${i}"${sel==='iem:'+i?' selected':''}>IEM ${i+1} — ${esc(c.role)}</option>`; });
   state.mics.forEach((c,i)=>{ o += `<option value="mic:${i}"${sel==='mic:'+i?' selected':''}>Mic ${i+1} — ${esc(c.role)}</option>`; });
+  (state.talkMics||[]).forEach((c,i)=>{ o += `<option value="talk:${i}"${sel==='talk:'+i?' selected':''}>Spk — ${esc(c.role)}</option>`; });
   return o;
 }
 let shureLive = {};
@@ -1316,13 +1334,20 @@ async function applyConflictRules() {
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────────
+let rightTab='prod'; // which list the right editor column shows
+function setRightTab(t){rightTab=t;render();}
 function render(){
   if(!state)return;
+  if(!Array.isArray(state.talkMics))state.talkMics=[]; // pre-talkMics snapshots
   document.getElementById('ftr-label').textContent=state.serviceName||'RF Assign';
   document.getElementById('iem-ct').textContent=state.iems.filter(c=>c.status==='active').length+' active';
-  document.getElementById('prod-ct').textContent=state.prod.filter(c=>c.status==='active').length+' active';
+  const rightArr=rightTab==='talk'?state.talkMics:state.prod;
+  document.getElementById('prod-ct').textContent=rightArr.filter(c=>c.status==='active').length+' active';
+  const tp=document.getElementById('rtab-prod'),tt=document.getElementById('rtab-talk');
+  if(tp)tp.classList.toggle('active',rightTab==='prod');
+  if(tt)tt.classList.toggle('active',rightTab==='talk');
   renderList('iem');
-  renderList('prod');
+  renderList(rightTab==='talk'?'talk':'prod');
 }
 
 function avatar(name,photo,size=32){
@@ -1337,6 +1362,7 @@ function poolOptions(assigned, slotType='iem'){
   state.iems.forEach(c=>{if(c.name)allAssigned.add(c.name)});
   state.mics.forEach(c=>{if(c.name)allAssigned.add(c.name)});
   state.prod.forEach(c=>{if(c.name)allAssigned.add(c.name)});
+  (state.talkMics||[]).forEach(c=>{if(c.name)allAssigned.add(c.name)});
 
   const seen=new Set();
   const combined=[];
@@ -1362,6 +1388,7 @@ function poolOptions(assigned, slotType='iem'){
     const person=(peopleLibrary||[]).find(x=>x.name===p.name);
     const hasProd = tag.prodPosition || person?.defaultProdPosition;
     const hasIem  = (tag.iemSlot!=null && tag.iemSlot!==undefined) || (person?.defaultIemSlot!=null && person?.defaultIemSlot!==undefined);
+    if(slotType==='any') return true; // talking-head mics: anyone not already placed
     if(slotType==='prod') return hasProd || (!hasIem && !hasProd);
     return hasIem || (!hasIem && !hasProd);
   });
@@ -1372,7 +1399,8 @@ function poolOptions(assigned, slotType='iem'){
 
 function renderList(type){
   const arr=arrFor(type);
-  const el=document.getElementById(type+'-list');
+  // the talk-mic list shares the right column container with production
+  const el=document.getElementById(type==='talk'?'prod-list':type+'-list');
   let html='';
   if(type==='prod'){
     // Group by position with header
@@ -1419,18 +1447,18 @@ function renderList(type){
       const tagIcon=savedTags[ch.name]?'tagged':'';
       html+=`<div class="assign-row ${type==='iem'?'iem-row':'mic-row'}" onclick="toggleExpand('${type}','${ch.id}')" style="cursor:pointer">
         <div class="row-ch">${ch.ch}</div>
-        <div class="row-role">${esc(ch.role)}</div>
+        <div class="row-role">${esc(ch.role)}${type==='talk'&&ch.note?`<div style="font-size:9px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ch.note)}</div>`:''}</div>
         ${avatar(ch.name,ch.photo,30)}
         <div style="display:flex;gap:4px;align-items:center" onclick="event.stopPropagation()">
           <select class="row-select${ch.name?' filled':''}"
             onchange="assignSlot('${type}','${ch.id}',this.value)"
             style="flex:1;max-height:200px">
             <option value="">— unassigned —</option>
-            ${poolOptions(ch.name,'iem')}
+            ${poolOptions(ch.name,type==='talk'?'any':'iem')}
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:3px">
-          ${ch.name?`<button class="tag-btn ${tagIcon}" onclick="event.stopPropagation();quickTag('${type}','${ch.id}')" title="Save as tag"><i class="ti ti-tag"></i></button>`:'<span style="width:24px"></span>'}
+          ${ch.name&&type!=='talk'?`<button class="tag-btn ${tagIcon}" onclick="event.stopPropagation();quickTag('${type}','${ch.id}')" title="Save as tag"><i class="ti ti-tag"></i></button>`:'<span style="width:24px"></span>'}
         </div>
       </div>`;
       if(isExp)html+=expandedFields(ch,type);
@@ -1440,7 +1468,7 @@ function renderList(type){
 }
 
 function shureChannelOpts(type, ch) {
-  const arr = type==='mic' ? state.mics : state.iems;
+  const arr = type==='mic' ? state.mics : type==='talk' ? (state.talkMics||[]) : state.iems;
   const slotIndex = arr.findIndex(c=>c.id===ch.id);
   let opts = '<option value="">— none —</option>';
   if (!shureDevs.length) return opts + '<option value="" disabled>Add receivers in Settings → Integrations</option>';
@@ -1460,7 +1488,7 @@ function shureChannelOpts(type, ch) {
 }
 
 async function assignShureChannel(type, id, val) {
-  const arr = type==='mic' ? state.mics : state.iems;
+  const arr = type==='mic' ? state.mics : type==='talk' ? (state.talkMics||[]) : state.iems;
   const slotIndex = arr.findIndex(c=>c.id===id);
   if (slotIndex < 0) return;
   // Remove any mapping currently pointing at this slot
@@ -1491,6 +1519,14 @@ function expandedFields(ch,type){
     <div class="ef"><label>Mix</label><input type="text" value="${esc(ch.mix||'')}" onchange="uf('${type}','${ch.id}','mix',this.value)"></div>
     <div class="ef"><label>Freq (MHz)</label><input type="text" value="${esc(ch.freq||'')}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>
     <div class="ef"><label>Wireless channel (WWB)</label><select onchange="assignShureChannel('${type}','${ch.id}',this.value)">${shureChannelOpts(type,ch)}</select></div>`;
+  else if(type==='talk')extra=`
+    <div class="ef"><label>RF #</label><input type="text" value="${esc(String(ch.ch??''))}" placeholder="9" onchange="uf('${type}','${ch.id}','ch',this.value.trim())"></div>
+    <div class="ef"><label>Type</label><select onchange="uf('${type}','${ch.id}','type',this.value)">
+      ${['Handheld','Lavalier','Headset','Podium'].map(t=>`<option${ch.type===t?' selected':''}>${t}</option>`).join('')}
+    </select></div>
+    <div class="ef"><label>Note (shows on the board)</label><input type="text" value="${esc(ch.note||'')}" placeholder="e.g. hands to Lav after welcome" onchange="uf('${type}','${ch.id}','note',this.value)"></div>
+    <div class="ef"><label>Freq (MHz)</label><input type="text" value="${esc(ch.freq||'')}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>
+    <div class="ef"><label>Wireless channel (WWB)</label><select onchange="assignShureChannel('${type}','${ch.id}',this.value)">${shureChannelOpts(type,ch)}</select></div>`;
   else extra=`
     <div class="ef"><label>Position</label><select onchange="uf('${type}','${ch.id}','position',this.value)">
       ${Object.entries(PROD_POS).map(([k,v])=>`<option value="${k}"${ch.position===k?' selected':''}>${v.label}</option>`).join('')}
@@ -1513,6 +1549,7 @@ function expandedFields(ch,type){
     </div>
     <div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end">
       ${type==='prod'?`<button class="btn danger" onclick="deleteProd('${ch.id}')"><i class="ti ti-trash"></i> Remove</button>`:''}
+      ${type==='talk'?`<button class="btn danger" onclick="deleteTalk('${ch.id}')"><i class="ti ti-trash"></i> Remove</button>`:''}
       <button class="btn" onclick="toggleExpand(null,null)">Done</button>
     </div>
   </div>`;
@@ -1578,6 +1615,23 @@ function addProdSlot(){
   idCtr++;
   state.prod.push({id:'p'+idCtr,position:'stage',role:'Stage hand',name:'',note:'',status:'active',photo:''});
   render();push();
+}
+
+function addTalkMic(){
+  idCtr++;
+  state.talkMics=state.talkMics||[];
+  // RF numbering continues from the highest existing talk mic (band is 1-8)
+  const nums=state.talkMics.map(c=>parseInt(c.ch)).filter(n=>!isNaN(n));
+  const ch=(nums.length?Math.max(...nums):8)+1;
+  state.talkMics.push({id:'t'+idCtr,ch,role:'RF '+ch,name:'',type:'Handheld',note:'',freq:'',status:'active',bat:null,photo:''});
+  render();push();
+}
+
+function addRightSlot(){ if(rightTab==='talk')addTalkMic(); else addProdSlot(); }
+
+function deleteTalk(id){
+  state.talkMics=(state.talkMics||[]).filter(p=>p.id!==id);
+  expandedRow=null;render();push();
 }
 
 // ── Panel toggle ───────────────────────────────────────────────────────────────
@@ -1958,6 +2012,7 @@ async function newBlankService(name){
   blank.mics.forEach(c => { c.name=''; c.photo=''; c.status='na'; });
   blank.iems.forEach(c => { c.name=''; c.photo=''; c.status='na'; c.mix=''; });
   blank.prod.forEach(c => { c.name=''; c.photo=''; });
+  (blank.talkMics||[]).forEach(c => { c.name=''; c.photo=''; c.note=''; });
   const res = await fetch('/api/playlist', {
     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name })
   });

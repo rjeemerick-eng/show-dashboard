@@ -279,6 +279,37 @@ function scaleText(container){
   }
 }
 
+// Talking-head mic assignments — RF number, who's on it, role, note, battery
+function renderTalkMics(list){
+  if(!list||!list.length)return '<div style="padding:24px 28px;color:var(--text-dim);font-size:13px">No mic assignments — add them on the editor\'s Mic assignments tab.</div>';
+  return list.map(c=>{
+    const hasName=c.name&&c.name.trim();
+    const on=hasName||(c.status==='active');
+    const bat=(c.bat!=null)?c.bat:null;
+    const dotCls=!hasName?'off':(bat!==null&&bat<30)?'warn':'on';
+    const col=colorFor(c.name||c.role);
+    const av=hasName
+      ?(c.photo?`<img src="${esc(c.photo)}" alt="${esc(c.name)}" onerror="this.style.display='none'">`:esc(initials(c.name)))
+      :'';
+    const avatarEl=hasName
+      ?`<div class="avatar-circle" style="background:${col};width:36px;height:36px;font-size:11px">${av}</div>`
+      :`<div style="width:36px;height:36px;flex-shrink:0"></div>`;
+    const batEl=(bat!==null)
+      ?`<div class="bat ${bat<20?'bat-red':bat<40?'bat-amber':'bat-green'}"><span class="bat-body"><span class="bat-fill" style="width:${Math.max(6,bat)}%"></span></span>${bat}%</div>`
+      :'<div></div>';
+    return `<div class="person-row iem-row${on?'':' na'}">
+      <div class="pack-num">${esc(String(c.ch??''))}${c.wwbName?`<div class="wwb-name">${esc(c.wwbName)}</div>`:''}</div>
+      ${avatarEl}
+      <div class="cell-name" style="color:var(--text);font-weight:900">${esc(c.name)||'—'}</div>
+      <div style="min-width:0">
+        <div class="cell-role" style="color:var(--text-mid);font-weight:700"><div class="s-dot ${dotCls}"></div>${esc(c.role)}</div>
+        ${c.note?`<div style="font-size:10px;font-weight:600;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:none;letter-spacing:0.02em;margin-top:1px">${esc(c.note)}</div>`:''}
+      </div>
+      ${batEl}
+    </div>`;
+  }).join('');
+}
+
 function fmtLen(sec){
   if(!sec||isNaN(sec))return '';
   const m=Math.floor(sec/60), s=sec%60;
@@ -351,6 +382,12 @@ function render(s){
       const items=(s.ros||[]).filter(i=>i.type!=='header').length;
       prodCt.textContent = items ? items + ' items' : '';
       list.innerHTML = renderROS(s.ros);
+    } else if (v.rightZone === 'mics') {
+      rightTitle.textContent = 'Mic assignments';
+      const tm = s.talkMics || [];
+      const act = tm.filter(c=>c.name).length;
+      prodCt.textContent = act ? `${act} assigned` : '';
+      list.innerHTML = renderTalkMics(tm);
     } else {
       rightTitle.textContent = 'Production crew';
       prodCt.textContent = `${activeProd} active`;

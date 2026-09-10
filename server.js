@@ -226,18 +226,33 @@ let state = {
     { id: 'p9',  position: 'dir',    role: 'Producer',       name: '', note: '', status: 'active', photo: '' },
     { id: 'p10', position: 'dir',    role: 'Video director', name: '', note: '', status: 'active', photo: '' },
     { id: 'p11', position: 'stream', role: 'Shader',         name: '', note: '', status: 'active', photo: '' },
+  ],
+  // Talking-head mics (pastor/host/speakers) — the board's right zone can show
+  // these; RF numbering continues past the band by convention (RF 9+)
+  talkMics: [
+    { id: 't1', ch: 9,  role: 'RF 9',  name: '', type: 'Handheld', note: '', freq: '', status: 'active', bat: null, photo: '' },
+    { id: 't2', ch: 10, role: 'RF 10', name: '', type: 'Handheld', note: '', freq: '', status: 'active', bat: null, photo: '' },
+    { id: 't3', ch: 11, role: 'RF 11', name: '', type: 'Lavalier', note: '', freq: '', status: 'active', bat: null, photo: '' },
+    { id: 't4', ch: 12, role: 'RF 12', name: '', type: 'Lavalier', note: '', freq: '', status: 'active', bat: null, photo: '' },
   ]
 };
 
+// Older snapshots (disk state, playlist entries) predate talkMics
+function normalizeState(s) {
+  if (s && !Array.isArray(s.talkMics)) s.talkMics = [];
+  return s;
+}
+
 // Restore active service state from playlist (must be after state declaration)
 loadPlaylist();
+normalizeState(state);
 // Restore last live board state (survives restarts). Takes precedence over
 // the active playlist snapshot because it includes unsaved live changes.
 try {
   if (fs.existsSync(STATE_FILE)) {
     const saved = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
     if (saved && saved.iems && saved.prod) {
-      state = saved;
+      state = normalizeState(saved);
       console.log('[State] Restored last live state from disk');
     }
   }
@@ -248,7 +263,7 @@ try {
 // If the slot arrays are present they must actually be arrays.
 function isStatePatch(p) {
   if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
-  for (const k of ['iems', 'mics', 'prod', 'ros', 'roster']) {
+  for (const k of ['iems', 'mics', 'prod', 'ros', 'roster', 'talkMics']) {
     if (k in p && p[k] !== null && !Array.isArray(p[k])) return false;
   }
   return true;
@@ -811,7 +826,7 @@ app.delete('/api/playlist/:id', (req, res) => {
 app.post('/api/playlist/:id/go-live', (req, res) => {
   const svc = playlist.find(s => s.id === req.params.id);
   if (!svc) return res.status(404).json({ error: 'Not found' });
-  state = JSON.parse(JSON.stringify(svc.state));
+  state = normalizeState(JSON.parse(JSON.stringify(svc.state)));
   state.serviceName = svc.name; // guarantee the live board title matches, even for old snapshots
   activeServiceId = svc.id;
   savePlaylist();
@@ -978,7 +993,7 @@ async function runAutoPull(sched, trigger) {
     if (svc) svc.state = st;
     else { svc = { id: 'svc_' + Date.now(), name: planName, createdAt: new Date().toISOString(), state: st }; playlist.push(svc); }
     if (sched.goLive) {
-      state = JSON.parse(JSON.stringify(svc.state));
+      state = normalizeState(JSON.parse(JSON.stringify(svc.state)));
       state.serviceName = svc.name;
       activeServiceId = svc.id;
       saveStateSoon();
@@ -1219,7 +1234,7 @@ function applyShureRep(dev, chNum, data) {
   if (st) { st.channels[chNum] = { ...(st.channels[chNum] || {}), ...data }; st.lastSeen = Date.now(); st.ok = true; st.error = null; }
   const map = (dev.channels || []).find(c => c.ch === chNum);
   if (!map) return;
-  const arr = map.slotType === 'mic' ? state.mics : state.iems;
+  const arr = map.slotType === 'mic' ? state.mics : map.slotType === 'talk' ? state.talkMics : state.iems;
   const slot = arr && arr[map.slotIndex];
   if (!slot) return;
   let changed = false;
@@ -1295,7 +1310,7 @@ function connectShure(dev) {
     // A dead link means we no longer know the battery — clear it off the board
     let cleared = false;
     (dev.channels || []).forEach(c => {
-      const arr = c.slotType === 'mic' ? state.mics : state.iems;
+      const arr = c.slotType === 'mic' ? state.mics : c.slotType === 'talk' ? state.talkMics : state.iems;
       const slot = arr && arr[c.slotIndex];
       if (slot && slot.bat != null) { slot.bat = null; cleared = true; }
     });
