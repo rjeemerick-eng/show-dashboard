@@ -1464,7 +1464,27 @@ function renderList(type){
       if(isExp)html+=expandedFields(ch,type);
     });
   }
+  if(type==='talk'){
+    html+=`<div style="display:flex;gap:8px;align-items:center;padding:10px 12px;flex-wrap:wrap">
+      <button class="btn" style="padding:3px 10px;font-size:11px" onclick="saveTalkDefaults()"><i class="ti ti-bookmark"></i> Save as default</button>
+      <button class="btn" style="padding:3px 10px;font-size:11px" onclick="restoreTalkDefaults()"><i class="ti ti-restore"></i> Restore default</button>
+      <span style="font-size:10px;color:var(--text-dim)">These carry week to week — PCO pulls and service switches never touch them.</span>
+    </div>`;
+  }
   el.innerHTML=html;
+}
+
+async function saveTalkDefaults(){
+  const r=await fetch('/api/talk-defaults',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({talkMics:state.talkMics||[]})}).then(res=>res.json()).catch(e=>({error:e.message}));
+  if(r.ok)toast(`<i class="ti ti-bookmark"></i> Mic assignments saved as default (${r.count} rows)`);
+  else toast('Could not save default: '+esc(r.error||'unknown'),'#ef4444');
+}
+async function restoreTalkDefaults(){
+  const d=await fetch('/api/talk-defaults').then(r=>r.json()).catch(()=>null);
+  if(!d||!Array.isArray(d.talkMics)||!d.talkMics.length){toast('No default saved yet — set up the list, then hit Save as default','#f59e0b');return;}
+  state.talkMics=d.talkMics;
+  render();push();
+  toast('<i class="ti ti-restore"></i> Default mic assignments restored');
 }
 
 function shureChannelOpts(type, ch) {
@@ -2012,7 +2032,7 @@ async function newBlankService(name){
   blank.mics.forEach(c => { c.name=''; c.photo=''; c.status='na'; });
   blank.iems.forEach(c => { c.name=''; c.photo=''; c.status='na'; c.mix=''; });
   blank.prod.forEach(c => { c.name=''; c.photo=''; });
-  (blank.talkMics||[]).forEach(c => { c.name=''; c.photo=''; c.note=''; });
+  // talk mics are standing config — a new blank week keeps them
   const res = await fetch('/api/playlist', {
     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name })
   });
@@ -2044,6 +2064,8 @@ async function updateSvc(id){if(!confirm('Overwrite with current plot?'))return;
 async function previewSvc(id){
   const name=(playlistData.find(s=>s.id===id)||{}).name||'';
   const s=await fetch(`/api/playlist/${id}/preview`).then(r=>r.json());
+  // talk mics carry week to week — a snapshot never overwrites the current list
+  if(Array.isArray(state.talkMics)&&state.talkMics.length)s.talkMics=state.talkMics;
   state=s;render();push();
   toast(`<i class="ti ti-eye"></i> Previewing: ${esc(name)}`,'#7eb8f5');
 }

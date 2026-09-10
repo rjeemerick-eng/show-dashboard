@@ -823,10 +823,18 @@ app.delete('/api/playlist/:id', (req, res) => {
 });
 
 // Go live with a service (switches the active display state)
+// Talking-head mic assignments carry week to week: they're standing config,
+// not part of a service's weekly snapshot. Switching services keeps the
+// current live list (an older/pre-talkMics snapshot must never wipe it).
+function carryTalkMics(next) {
+  if (Array.isArray(state.talkMics) && state.talkMics.length) next.talkMics = state.talkMics;
+  return next;
+}
+
 app.post('/api/playlist/:id/go-live', (req, res) => {
   const svc = playlist.find(s => s.id === req.params.id);
   if (!svc) return res.status(404).json({ error: 'Not found' });
-  state = normalizeState(JSON.parse(JSON.stringify(svc.state)));
+  state = carryTalkMics(normalizeState(JSON.parse(JSON.stringify(svc.state))));
   state.serviceName = svc.name; // guarantee the live board title matches, even for old snapshots
   activeServiceId = svc.id;
   savePlaylist();
@@ -993,7 +1001,7 @@ async function runAutoPull(sched, trigger) {
     if (svc) svc.state = st;
     else { svc = { id: 'svc_' + Date.now(), name: planName, createdAt: new Date().toISOString(), state: st }; playlist.push(svc); }
     if (sched.goLive) {
-      state = normalizeState(JSON.parse(JSON.stringify(svc.state)));
+      state = carryTalkMics(normalizeState(JSON.parse(JSON.stringify(svc.state))));
       state.serviceName = svc.name;
       activeServiceId = svc.id;
       saveStateSoon();
@@ -1122,6 +1130,23 @@ app.post('/api/autopull/run', async (req, res) => {
 
 // App version info
 // Export all data as a single JSON bundle
+// ─── Talking-head mic defaults (standing config, survives everything) ─────────
+const TALK_DEFAULTS_FILE = path.join(DATA_DIR, 'talk-defaults.json');
+app.get('/api/talk-defaults', (req, res) => {
+  try {
+    if (fs.existsSync(TALK_DEFAULTS_FILE)) return res.json(JSON.parse(fs.readFileSync(TALK_DEFAULTS_FILE, 'utf8')));
+  } catch(e) {}
+  res.json({ talkMics: [] });
+});
+app.post('/api/talk-defaults', (req, res) => {
+  const list = req.body && Array.isArray(req.body.talkMics) ? req.body.talkMics : null;
+  if (!list) return res.status(400).json({ error: 'talkMics array required' });
+  try { fs.writeFileSync(TALK_DEFAULTS_FILE, JSON.stringify({ talkMics: list }, null, 2)); }
+  catch(e) { return res.status(500).json({ error: e.message }); }
+  console.log(`[TalkMics] Default saved (${list.length} rows)`);
+  res.json({ ok: true, count: list.length });
+});
+
 app.get('/api/export', (req, res) => {
   const bundle = {
     exportedAt: new Date().toISOString(),
