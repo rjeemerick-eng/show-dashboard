@@ -293,8 +293,9 @@ function renderTalkMics(list){
     const hasName=c.name&&c.name.trim();
     const on=hasName||(c.status==='active');
     const bat=(c.bat!=null)?c.bat:null;
-    const rf=String(c.ch??'');
-    const rfLbl=/^rf/i.test(rf)?rf.toUpperCase():'RF'+rf;
+    // Labels are free text ("RF9", "HH1"); bare numbers from old rows get RF
+    const v=String(c.ch??'');
+    const rfLbl=/^\d+$/.test(v)?'RF'+v:v;
     const batEl=(bat!==null)
       ?`<div class="bat ${bat<20?'bat-red':bat<40?'bat-amber':'bat-green'}"><span class="bat-body"><span class="bat-fill" style="width:${Math.max(6,bat)}%"></span></span>${bat}%</div>`
       :'<div></div>';

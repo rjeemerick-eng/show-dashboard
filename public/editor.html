@@ -682,7 +682,7 @@ function exportPDF() {
       ${talk.map(c=>`
       <div class="pmrow">
         ${av(c.name, c.photo, 26)}
-        <div class="pmtext"><span class="pmname">${esc(c.name)}</span><span class="pmrole" style="color:#E24B4A">RF ${esc(String(c.ch??''))} · ${esc(c.role)}${c.note?` — ${esc(c.note)}`:''}</span></div>
+        <div class="pmtext"><span class="pmname">${esc(c.name)}</span><span class="pmrole" style="color:#E24B4A">${esc(talkLabel(c))}${c.note?` — ${esc(c.note)}`:''}</span></div>
       </div>`).join('')}
     </div>` : '';
 
@@ -870,7 +870,7 @@ function slotOpts(sel) {
   let o = '<option value="">— not mapped —</option>';
   state.iems.forEach((c,i)=>{ o += `<option value="iem:${i}"${sel==='iem:'+i?' selected':''}>IEM ${i+1} — ${esc(c.role)}</option>`; });
   state.mics.forEach((c,i)=>{ o += `<option value="mic:${i}"${sel==='mic:'+i?' selected':''}>Mic ${i+1} — ${esc(c.role)}</option>`; });
-  (state.talkMics||[]).forEach((c,i)=>{ const rf=String(c.ch??''); o += `<option value="talk:${i}"${sel==='talk:'+i?' selected':''}>${esc(/^rf/i.test(rf)?rf.toUpperCase():'RF'+rf)}${c.name?` — ${esc(c.name)}`:''}</option>`; });
+  (state.talkMics||[]).forEach((c,i)=>{ o += `<option value="talk:${i}"${sel==='talk:'+i?' selected':''}>${esc(talkLabel(c))}${c.name?` — ${esc(c.name)}`:''}</option>`; });
   return o;
 }
 let shureLive = {};
@@ -1437,21 +1437,27 @@ function renderList(type){
       });
     });
   } else if(type==='talk'){
-    // Talking-head mics: free-typed name + notes, laid out MIC | NAME | NOTES
-    arr.forEach(ch=>{
+    // Talking-head mics: everything free-typed inline — mic label, name, notes —
+    // with reorder arrows. MIC | TALKING HEAD | NOTES like the sample sheet.
+    arr.forEach((ch,i)=>{
       const isExp=expandedRow&&expandedRow.type==='talk'&&expandedRow.id===ch.id;
-      const rf=String(ch.ch??'');
-      const rfLbl=/^rf/i.test(rf)?rf.toUpperCase():'RF'+rf;
       const dotCls=ch.name?(ch.bat!==null&&ch.bat!=null&&ch.bat<30?'warn':'on'):'off';
-      html+=`<div class="assign-row" style="grid-template-columns:56px 1fr 1fr 28px;cursor:pointer" onclick="toggleExpand('talk','${ch.id}')">
-        <div class="row-ch" style="text-align:left;font-size:12px">${esc(rfLbl)}</div>
+      const mvBtn='padding:1px 5px;border-radius:4px;border:1px solid var(--border-mid);background:none;color:var(--text-dim);cursor:pointer;font-size:9px;line-height:1.4';
+      html+=`<div class="assign-row" style="grid-template-columns:80px 1fr 1fr 72px;cursor:pointer" onclick="toggleExpand('talk','${ch.id}')">
+        <input type="text" value="${esc(talkLabel(ch))}" placeholder="mic #"
+          onclick="event.stopPropagation()" onchange="uf('talk','${ch.id}','ch',this.value.trim())"
+          style="width:100%;padding:5px 7px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s2);color:var(--text);font-size:11px;font-weight:800;font-family:inherit">
         <input type="text" value="${esc(ch.name||'')}" placeholder="talking head"
           onclick="event.stopPropagation()" onchange="uf('talk','${ch.id}','name',this.value.trim())"
           style="width:100%;padding:5px 8px;border:1px solid ${ch.name?'rgba(34,197,94,0.4)':'var(--border-mid)'};border-radius:6px;background:var(--s3);color:var(--text);font-size:12px;font-family:inherit">
         <input type="text" value="${esc(ch.note||'')}" placeholder="notes"
           onclick="event.stopPropagation()" onchange="uf('talk','${ch.id}','note',this.value)"
           style="width:100%;padding:5px 8px;border:1px solid var(--border-mid);border-radius:6px;background:var(--s3);color:var(--text-mid);font-size:12px;font-family:inherit">
-        <div style="display:flex;align-items:center;justify-content:center"><div class="s-dot ${dotCls}"></div></div>
+        <div style="display:flex;align-items:center;gap:3px;justify-content:flex-end" onclick="event.stopPropagation()">
+          <button onclick="moveTalk('${ch.id}',-1)" title="Move up"${i===0?' disabled':''} style="${mvBtn}${i===0?';opacity:0.25;cursor:default':''}">▲</button>
+          <button onclick="moveTalk('${ch.id}',1)" title="Move down"${i===arr.length-1?' disabled':''} style="${mvBtn}${i===arr.length-1?';opacity:0.25;cursor:default':''}">▼</button>
+          <div class="s-dot ${dotCls}"></div>
+        </div>
       </div>`;
       if(isExp)html+=expandedFields(ch,'talk');
     });
@@ -1557,11 +1563,9 @@ function expandedFields(ch,type){
     <div class="ef"><label>Freq (MHz)</label><input type="text" value="${esc(ch.freq||'')}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>
     <div class="ef"><label>Wireless channel (WWB)</label><select onchange="assignShureChannel('${type}','${ch.id}',this.value)">${shureChannelOpts(type,ch)}</select></div>`;
   else if(type==='talk')extra=`
-    <div class="ef"><label>RF #</label><input type="text" value="${esc(String(ch.ch??''))}" placeholder="9" onchange="uf('${type}','${ch.id}','ch',this.value.trim())"></div>
     <div class="ef"><label>Type</label><select onchange="uf('${type}','${ch.id}','type',this.value)">
       ${['Handheld','Lavalier','Headset','Podium'].map(t=>`<option${ch.type===t?' selected':''}>${t}</option>`).join('')}
     </select></div>
-    <div class="ef"><label>Note (shows on the board)</label><input type="text" value="${esc(ch.note||'')}" placeholder="e.g. hands to Lav after welcome" onchange="uf('${type}','${ch.id}','note',this.value)"></div>
     <div class="ef"><label>Freq (MHz)</label><input type="text" value="${esc(ch.freq||'')}" placeholder="000.000" onchange="uf('${type}','${ch.id}','freq',this.value)"></div>
     <div class="ef"><label>Wireless channel (WWB)</label><select onchange="assignShureChannel('${type}','${ch.id}',this.value)">${shureChannelOpts(type,ch)}</select></div>`;
   else extra=`
@@ -1654,20 +1658,59 @@ function addProdSlot(){
   render();push();
 }
 
+// Mic labels are free text ("RF9", "HH1", "38"); old rows stored bare numbers,
+// which display with an RF prefix
+function talkLabel(ch){
+  const v=String(ch.ch??'');
+  return /^\d+$/.test(v)?'RF'+v:v;
+}
+
 function addTalkMic(){
   idCtr++;
   state.talkMics=state.talkMics||[];
-  // RF numbering continues from the highest existing talk mic (band is 1-8)
-  const nums=state.talkMics.map(c=>parseInt(c.ch)).filter(n=>!isNaN(n));
-  const ch=(nums.length?Math.max(...nums):8)+1;
-  state.talkMics.push({id:'t'+idCtr,ch,role:'RF '+ch,name:'',type:'Handheld',note:'',freq:'',status:'active',bat:null,photo:''});
+  // suggest the next number after the highest one found in existing labels
+  const nums=state.talkMics.map(c=>parseInt(String(c.ch).replace(/\D/g,''))).filter(n=>!isNaN(n));
+  const n=(nums.length?Math.max(...nums):8)+1;
+  state.talkMics.push({id:'t'+idCtr,ch:'RF'+n,role:'',name:'',type:'Handheld',note:'',freq:'',status:'active',bat:null,photo:''});
   render();push();
 }
 
 function addRightSlot(){ if(rightTab==='talk')addTalkMic(); else addProdSlot(); }
 
+// Wireless mappings are keyed by row INDEX — keep them glued to their rows
+// whenever the list is reordered or a row is removed
+function saveTalkMappingChanges(){
+  fetch('/api/shure-devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(shureDevs.filter(d=>d.ip))});
+}
+function moveTalk(id,dir){
+  const arr=state.talkMics||[];
+  const i=arr.findIndex(c=>c.id===id);
+  const j=i+dir;
+  if(i<0||j<0||j>=arr.length)return;
+  [arr[i],arr[j]]=[arr[j],arr[i]];
+  let changed=false;
+  shureDevs.forEach(d=>(d.channels||[]).forEach(c=>{
+    if(c.slotType!=='talk')return;
+    if(c.slotIndex===i){c.slotIndex=j;changed=true;}
+    else if(c.slotIndex===j){c.slotIndex=i;changed=true;}
+  }));
+  if(changed)saveTalkMappingChanges();
+  render();push();
+}
+
 function deleteTalk(id){
-  state.talkMics=(state.talkMics||[]).filter(p=>p.id!==id);
+  const arr=state.talkMics||[];
+  const i=arr.findIndex(c=>c.id===id);
+  if(i<0)return;
+  arr.splice(i,1);
+  let changed=false;
+  shureDevs.forEach(d=>{
+    const before=(d.channels||[]).length;
+    d.channels=(d.channels||[]).filter(c=>!(c.slotType==='talk'&&c.slotIndex===i));
+    if(d.channels.length!==before)changed=true;
+    d.channels.forEach(c=>{if(c.slotType==='talk'&&c.slotIndex>i){c.slotIndex--;changed=true;}});
+  });
+  if(changed)saveTalkMappingChanges();
   expandedRow=null;render();push();
 }
 
