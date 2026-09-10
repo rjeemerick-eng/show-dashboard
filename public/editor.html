@@ -515,7 +515,8 @@ function toast(msg,color='#4ade80'){
   el.innerHTML=msg;document.body.appendChild(el);
   setTimeout(()=>{el.style.opacity='0';setTimeout(()=>el.remove(),300)},2500);
 }
-function push(){if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'update',payload:state}))}
+let _lastPushAt=0;
+function push(){if(ws&&ws.readyState===WebSocket.OPEN){ws.send(JSON.stringify({type:'update',payload:state}));_lastPushAt=Date.now();}}
 
 // ── WebSocket ──────────────────────────────────────────────────────────────────
 function connect(){
@@ -529,6 +530,12 @@ function connect(){
     const msg=JSON.parse(e.data);
     if(msg.type==='state'){
       const firstLoad = !state;
+      // Stale-echo guard: a broadcast built just before the server processed
+      // our own push can cross it in flight and arrive right after — applying
+      // it would revert the edit we just made (this scattered typed mic labels
+      // onto the wrong rows). Right after pushing, WE are the newest writer,
+      // so skip echoes in that window; the next broadcast carries our edit.
+      if(!firstLoad && Date.now()-_lastPushAt<1200) return;
       state=msg.payload;
       syncPoolFromState();
       render();
